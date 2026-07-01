@@ -1,0 +1,99 @@
+name: REMKO SmartWeb MQTT
+version: "0.1.0"
+slug: remko_smartweb_mqtt
+description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: false
+hassio_api: true
+hassio_role: default
+services:
+  - mqtt:want
+options:
+  remko:
+    base_url: https://smartweb.remko.media/
+    overview_url: ""
+    credentials_file: /data/credentials.json
+    username: ""
+    password: ""
+    device_name: ""
+    poll_interval_minutes: 15
+    request_timeout_seconds: 90
+  mqtt:
+    host: auto
+    port: 1883
+    username: ""
+    password: ""
+    topic_prefix: remko
+    discovery_prefix: homeassistant
+    retain_state: false
+  controls:
+    supported_modes:
+      - Auto
+      - Heizen
+      - Kühlen
+      - Standby
+      - Aus
+    min_temperature: 10
+    max_temperature: 60
+    temperature_step: 0.5
+  selectors:
+    username_input: ""
+    password_input: ""
+    login_button: ""
+    device_link: ""
+    temperature_top: ""
+    temperature_bottom: ""
+    target_temperature: ""
+    operating_mode: ""
+    status: ""
+    power_state: ""
+    power_on_button: ""
+    power_off_button: ""
+    mode_control: ""
+    target_temperature_input: ""
+    save_button: ""
+schema:
+  remko:
+    base_url: url
+    overview_url: str
+    credentials_file: str
+    username: str
+    password: password
+    device_name: str
+    poll_interval_minutes: "int(1,1440)"
+    request_timeout_seconds: "int(10,300)"
+  mqtt:
+    host: str
+    port: port
+    username: str
+    password: password
+    topic_prefix: str
+    discovery_prefix: str
+    retain_state: bool
+  controls:
+    supported_modes:
+      - str
+    min_temperature: float
+    max_temperature: float
+    temperature_step: float
+  selectors:
+    username_input: str
+    password_input: str
+    login_button: str
+    device_link: str
+    temperature_top: str
+    temperature_bottom: str
+    target_temperature: str
+    operating_mode: str
+    status: str
+    power_state: str
+    power_on_button: str
+    power_off_button: str
+    mode_control: str
+    target_temperature_input: str
+    save_button: str
+stage: experimental

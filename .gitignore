@@ -1,0 +1,9 @@
+Additional/
+credentials.json
+**/credentials.json
+test.json
+**/test.json
+.DS_Store
+*.pyc
+__pycache__/
+.venv/

@@ -1,0 +1,18 @@
+{
+  "remko": {
+    "base_url": "https://smartweb.remko.media/",
+    "overview_url": "",
+    "credentials_file": "",
+    "username": "your-remko-login@example.com",
+    "password": "your-remko-password",
+    "device_name": "WIFI Stick - Warmwasserwärmepumpe",
+    "poll_interval_minutes": 15,
+    "request_timeout_seconds": 90
+  },
+  "mqtt": {
+    "host": "auto",
+    "port": 1883,
+    "username": "",
+    "password": ""
+  }
+}

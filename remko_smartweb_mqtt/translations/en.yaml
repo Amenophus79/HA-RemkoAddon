@@ -1,0 +1,13 @@
+configuration:
+  remko:
+    name: REMKO SmartWeb
+    description: Credentials, device name, and polling for REMKO SmartWeb.
+  mqtt:
+    name: MQTT
+    description: Broker, topics, and discovery.
+  controls:
+    name: Controls
+    description: Limits and options for MQTT control entities.
+  selectors:
+    name: Selectors
+    description: Optional CSS or XPath selectors for REMKO SmartWeb.

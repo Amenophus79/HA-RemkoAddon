@@ -1,0 +1,35 @@
+configuration:
+  remko:
+    name: REMKO SmartWeb
+    description: Zugangsdaten, Geraetename und Polling fuer REMKO SmartWeb.
+    fields:
+      base_url:
+        name: Basis-URL
+        description: REMKO SmartWeb URL.
+      overview_url:
+        name: Uebersichts-URL
+        description: Optional direkte URL der Geraeteuebersicht.
+      username:
+        name: Benutzername
+        description: REMKO SmartWeb Benutzername.
+      password:
+        name: Passwort
+        description: REMKO SmartWeb Passwort.
+      device_name:
+        name: Geraetename
+        description: Name der Waermepumpe auf der Geraeteuebersicht.
+      poll_interval_minutes:
+        name: Polling-Intervall
+        description: Minuten zwischen automatischen Abfragen.
+      request_timeout_seconds:
+        name: Timeout
+        description: Sekunden fuer Browseraktionen und Seitenladevorgaenge.
+  mqtt:
+    name: MQTT
+    description: Broker, Topics und Discovery.
+  controls:
+    name: Steuerung
+    description: Grenzen und Optionen fuer MQTT-Bedienelemente.
+  selectors:
+    name: Selektoren
+    description: Optionale CSS- oder XPath-Selektoren fuer REMKO SmartWeb.

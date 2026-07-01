@@ -1,0 +1,99 @@
+# REMKO SmartWeb MQTT
+
+Home Assistant add-on that logs in to REMKO SmartWeb, opens the configured heat pump from the device overview, polls values every 15 minutes by default, and exposes state and commands through MQTT.
+
+The SmartWeb automation always runs in headless Chromium, so the add-on does not require a GUI, display server, VNC, or Xvfb.
+
+This add-on is experimental because REMKO SmartWeb is a browser UI, not a documented public API. The default scraper uses label and text heuristics. If your REMKO page uses different markup, configure the CSS/XPath selectors in the add-on options.
+
+## MQTT entities
+
+The add-on publishes retained MQTT discovery configs for:
+
+- SmartWeb availability binary sensor
+- SmartWeb status sensor
+- Top temperature sensor
+- Bottom temperature sensor
+- Status sensor
+- Operating mode sensor
+- Power switch
+- Operating mode select
+- Target temperature number
+
+State is published as JSON to:
+
+```text
+remko/<device_slug>/state
+```
+
+SmartWeb/pump availability feedback is published as JSON to:
+
+```text
+remko/<device_slug>/feedback
+```
+
+When the REMKO overview action icon is greyed out or the pump screen cannot be opened, the feedback status becomes `unavailable` and the message explains the timeout.
+
+Commands are accepted on:
+
+```text
+remko/<device_slug>/power/set
+remko/<device_slug>/mode/set
+remko/<device_slug>/temperature/set
+remko/<device_slug>/command/set
+```
+
+The JSON command topic accepts payloads like:
+
+```json
+{"power":"ON","mode":"Heizen","temperature":45}
+```
+
+## Required options
+
+- `remko.credentials_file`: Optional JSON file with REMKO/MQTT credentials, default `/data/credentials.json`.
+- `remko.username`: REMKO SmartWeb login user, unless provided by the credentials file.
+- `remko.password`: REMKO SmartWeb login password, unless provided by the credentials file.
+- `remko.device_name`: Name shown on the device overview page, unless provided by the credentials file.
+- `remko.poll_interval_minutes`: Poll interval, default `15`.
+- `remko.request_timeout_seconds`: Page and connection timeout, default `90`.
+
+## Selector options
+
+Use CSS selectors by default. Prefix with `xpath:` for XPath.
+
+Useful examples:
+
+```yaml
+selectors:
+  device_link: "xpath://a[contains(., 'Meine Waermepumpe')]"
+  temperature_top: ".temperature-top"
+  temperature_bottom: ".temperature-bottom"
+  operating_mode: ".operation-mode"
+  status: ".heatpump-status"
+  power_on_button: "xpath://button[contains(., 'Ein')]"
+  power_off_button: "xpath://button[contains(., 'Aus')]"
+  mode_control: "select[name='mode']"
+  target_temperature_input: "input[name='targetTemperature']"
+  save_button: "button[type='submit']"
+```
+
+## MQTT broker
+
+Set `mqtt.host` to `auto` to use the Supervisor MQTT service when available. Otherwise set the broker host, port, username, and password manually.
+
+## Tests without installing the add-on
+
+Fast unit tests do not require Selenium, Paho, MQTT, Home Assistant, or the add-on container:
+
+```sh
+python3 -m unittest discover -s tests
+```
+
+For a real SmartWeb probe, copy `test.example.json` to `test.json`, fill in credentials, install `remko_smartweb_mqtt/requirements.txt`, then run:
+
+```sh
+python3 scripts/probe_smartweb.py --config test.json
+```
+
+`test.json` is ignored by Git.
