@@ -24,6 +24,18 @@ configuration:
       request_timeout_seconds:
         name: Timeout
         description: Sekunden fuer Browseraktionen und Seitenladevorgaenge.
+      homeassistant_log:
+        name: Home-Assistant-Log
+        description: Nichtverfuegbarkeit und Fehler auch in das Home-Assistant-Systemlog schreiben.
+      homeassistant_log_logger:
+        name: Logger-Name
+        description: Logger-Name fuer Eintraege im Home-Assistant-Systemlog.
+      homeassistant_notification:
+        name: UI-Benachrichtigung
+        description: Nichtverfuegbarkeit als persistente Benachrichtigung in Home Assistant anzeigen.
+      homeassistant_notification_id:
+        name: Benachrichtigungs-ID
+        description: Eindeutige ID der persistenten Home-Assistant-Benachrichtigung.
   mqtt:
     name: MQTT
     description: Broker, Topics und Discovery.

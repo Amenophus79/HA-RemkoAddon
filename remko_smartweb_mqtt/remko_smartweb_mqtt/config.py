@@ -21,6 +21,10 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "device_name": "",
         "poll_interval_minutes": 15,
         "request_timeout_seconds": 90,
+        "homeassistant_log": True,
+        "homeassistant_log_logger": "remko_smartweb_mqtt",
+        "homeassistant_notification": True,
+        "homeassistant_notification_id": "remko_smartweb_mqtt_unavailable",
     },
     "mqtt": {
         "host": "auto",

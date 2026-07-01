@@ -8,6 +8,7 @@ from typing import Any
 
 from .config import ConfigError, load_options
 from .feedback import AVAILABLE, ERROR, UNAVAILABLE
+from .homeassistant_log import HomeAssistantLogNotifier
 from .models import Command
 from .mqtt_bridge import MqttBridge
 from .smartweb import RemkoSmartWebClient, SmartWebError
@@ -33,6 +34,7 @@ def main() -> None:
     command_queue: queue.Queue[Command] = queue.Queue()
     mqtt_bridge = MqttBridge(options, command_queue)
     smartweb = RemkoSmartWebClient(options)
+    ha_log = HomeAssistantLogNotifier(options)
     poll_interval = int(options["remko"]["poll_interval_minutes"]) * 60
 
     mqtt_bridge.connect()
@@ -58,11 +60,14 @@ def main() -> None:
                         available=True,
                     )
                     mqtt_bridge.publish_availability("online")
+                    ha_log.reset()
                 except Exception as exc:
                     LOGGER.exception("Polling REMKO SmartWeb failed")
                     mqtt_bridge.publish_error(exc)
                     status = UNAVAILABLE if isinstance(exc, SmartWebError) else ERROR
                     mqtt_bridge.publish_feedback(status, str(exc), available=False)
+                    level = "warning" if status == UNAVAILABLE else "error"
+                    ha_log.notify_once(status, str(exc), level=level)
                 next_poll = time.monotonic() + poll_interval
 
             time.sleep(1)

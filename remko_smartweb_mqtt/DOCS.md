@@ -46,6 +46,12 @@ Polling repeats every `remko.poll_interval_minutes` minutes. The default is `15`
 
 If the REMKO overview action icon is greyed out or the pump screen cannot be opened, the add-on publishes a feedback payload to `remko/<device_slug>/feedback` with `status: unavailable`, `available: false`, and a message explaining the timeout. Home Assistant also gets a SmartWeb availability binary sensor and SmartWeb status sensor through MQTT discovery.
 
+If `remko.homeassistant_log` is enabled, unavailable/error states are additionally written to the Home Assistant system log with the configured `remko.homeassistant_log_logger` logger name. The add-on calls Home Assistant Core through the Supervisor proxy and `system_log.write`; repeated identical messages are suppressed until a successful poll resets the notifier.
+
+If `remko.homeassistant_notification` is enabled, unavailable/error states are also shown as a persistent notification in the Home Assistant UI. The notification uses `remko.homeassistant_notification_id`, so a new failure updates the existing notification instead of creating a pile of duplicates. A successful poll dismisses it automatically.
+
+`<device_slug>` means the MQTT-safe version of `remko.device_name`: it is lowercased and non-ASCII/special characters are replaced with underscores. For `WIFI Stick - Warmwasserwärmepumpe`, the slug becomes `wifi_stick_warmwasserw_rmepumpe`.
+
 ## Control
 
 Home Assistant can control the heat pump through the discovered MQTT entities. Any MQTT client can also publish directly:

@@ -34,6 +34,14 @@ remko/<device_slug>/feedback
 
 When the REMKO overview action icon is greyed out or the pump screen cannot be opened, the feedback status becomes `unavailable` and the message explains the timeout.
 
+If `remko.homeassistant_log` is enabled, the same non-availability is also written to the Home Assistant system log through `system_log.write`. If `remko.homeassistant_notification` is enabled, the add-on also creates a persistent notification in the Home Assistant UI and dismisses it automatically after a successful poll. Repeated identical messages are de-duplicated until the pump is readable again.
+
+`<device_slug>` is the MQTT-safe form of `remko.device_name`: lowercase, spaces and special characters replaced with underscores. For `WIFI Stick - Warmwasserwärmepumpe`, the slug is `wifi_stick_warmwasserw_rmepumpe`, so the feedback topic is:
+
+```text
+remko/wifi_stick_warmwasserw_rmepumpe/feedback
+```
+
 Commands are accepted on:
 
 ```text
@@ -57,6 +65,8 @@ The JSON command topic accepts payloads like:
 - `remko.device_name`: Name shown on the device overview page, unless provided by the credentials file.
 - `remko.poll_interval_minutes`: Poll interval, default `15`.
 - `remko.request_timeout_seconds`: Page and connection timeout, default `90`.
+- `remko.homeassistant_log`: Write non-availability/errors to the Home Assistant system log, default `true`.
+- `remko.homeassistant_notification`: Show non-availability/errors as a Home Assistant persistent notification, default `true`.
 
 ## Selector options
 

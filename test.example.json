@@ -7,7 +7,11 @@
     "password": "your-remko-password",
     "device_name": "WIFI Stick - Warmwasserwärmepumpe",
     "poll_interval_minutes": 15,
-    "request_timeout_seconds": 90
+    "request_timeout_seconds": 90,
+    "homeassistant_log": true,
+    "homeassistant_log_logger": "remko_smartweb_mqtt",
+    "homeassistant_notification": true,
+    "homeassistant_notification_id": "remko_smartweb_mqtt_unavailable"
   },
   "mqtt": {
     "host": "auto",

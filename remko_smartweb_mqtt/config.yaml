@@ -8,6 +8,7 @@ arch:
 startup: application
 boot: auto
 init: false
+homeassistant_api: true
 hassio_api: true
 hassio_role: default
 services:
@@ -22,6 +23,10 @@ options:
     device_name: ""
     poll_interval_minutes: 15
     request_timeout_seconds: 90
+    homeassistant_log: true
+    homeassistant_log_logger: remko_smartweb_mqtt
+    homeassistant_notification: true
+    homeassistant_notification_id: remko_smartweb_mqtt_unavailable
   mqtt:
     host: auto
     port: 1883
@@ -66,6 +71,10 @@ schema:
     device_name: str
     poll_interval_minutes: "int(1,1440)"
     request_timeout_seconds: "int(10,300)"
+    homeassistant_log: bool
+    homeassistant_log_logger: str
+    homeassistant_notification: bool
+    homeassistant_notification_id: str
   mqtt:
     host: str
     port: port
