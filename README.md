@@ -15,3 +15,7 @@ remko_smartweb_mqtt/config.yaml
 ```
 
 See `remko_smartweb_mqtt/DOCS.md` for options, MQTT topics, and selector examples.
+
+## Continuous integration
+
+GitHub Actions runs the unit tests with coverage on pushes and pull requests. The total coverage value is written to the workflow job summary and `coverage.xml`/`coverage.json` are uploaded as artifacts.

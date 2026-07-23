@@ -7,3 +7,7 @@ test.json
 *.pyc
 __pycache__/
 .venv/
+.coverage
+coverage.xml
+coverage.json
+htmlcov/

@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests With Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            remko_smartweb_mqtt/requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r remko_smartweb_mqtt/requirements.txt -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: |
+          coverage run -m unittest discover -s tests
+          coverage report --show-missing
+          coverage xml -o coverage.xml
+          coverage json -o coverage.json
+
+      - name: Publish coverage summary
+        run: |
+          total="$(python -c 'import json; print("{:.1f}".format(json.load(open("coverage.json"))["totals"]["percent_covered"]))')"
+          {
+            echo "## Test Coverage"
+            echo
+            echo "**Total coverage:** ${total}%"
+            echo
+            echo '```text'
+            coverage report --show-missing
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            coverage.json
