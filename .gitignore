@@ -11,3 +11,5 @@ __pycache__/
 coverage.xml
 coverage.json
 htmlcov/
+local-docker/data/options.json
+local-docker/data/credentials.json

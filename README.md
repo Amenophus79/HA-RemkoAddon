@@ -16,6 +16,10 @@ remko_smartweb_mqtt/config.yaml
 
 See `remko_smartweb_mqtt/DOCS.md` for options, MQTT topics, and selector examples.
 
+## Local Docker test
+
+Use `local-docker/` to run the add-on with a local Mosquitto broker and inspect values with MQTT Explorer. See `local-docker/README.md`.
+
 ## Continuous integration
 
 GitHub Actions runs the unit tests with coverage on pushes and pull requests. The total coverage value is written to the workflow job summary and `coverage.xml`/`coverage.json` are uploaded as artifacts.

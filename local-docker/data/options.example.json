@@ -1,0 +1,26 @@
+{
+  "remko": {
+    "credentials_file": "/data/credentials.json",
+    "device_name": "WIFI Stick - Warmwasserwärmepumpe",
+    "device_url": "https://smartweb.remko.media/geraet/fernbedienung/c1fcffd51eb7c38b7209a6106d66cc84",
+    "poll_interval_minutes": 15,
+    "request_timeout_seconds": 180,
+    "live_value_timeout_seconds": 300,
+    "live_value_check_interval_seconds": 10,
+    "ignore_zero_temperatures": true,
+    "mode_set_attempts": 3,
+    "mode_set_retry_seconds": 20,
+    "power_on_mode": "Automatic",
+    "homeassistant_log": false,
+    "homeassistant_notification": false
+  },
+  "mqtt": {
+    "host": "mqtt",
+    "port": 1883,
+    "username": "",
+    "password": "",
+    "topic_prefix": "remko",
+    "discovery_prefix": "homeassistant",
+    "retain_state": true
+  }
+}
