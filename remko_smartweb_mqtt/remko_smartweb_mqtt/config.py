@@ -18,7 +18,7 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "base_url": "https://smartweb.remko.media/",
         "overview_url": "",
         "device_url": "",
-        "credentials_file": "/data/credentials.json",
+        "credentials_file": "/config/credentials.json",
         "username": "",
         "password": "",
         "device_name": "",

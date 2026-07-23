@@ -61,7 +61,7 @@ The JSON command topic accepts payloads like:
 
 ## Required options
 
-- `remko.credentials_file`: Optional JSON file with REMKO/MQTT credentials, default `/data/credentials.json`.
+- `remko.credentials_file`: Optional JSON file with REMKO/MQTT credentials, default `/config/credentials.json` in the Home Assistant add-on configuration folder.
 - `remko.username`: REMKO SmartWeb login user, unless provided by the credentials file.
 - `remko.password`: REMKO SmartWeb login password, unless provided by the credentials file.
 - `remko.device_name`: Name shown on the device overview page, unless provided by the credentials file.

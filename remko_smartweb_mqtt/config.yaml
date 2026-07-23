@@ -1,5 +1,5 @@
 name: REMKO SmartWeb MQTT
-version: "0.2.0"
+version: "0.2.1"
 slug: remko_smartweb_mqtt
 description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
 arch:
@@ -13,12 +13,14 @@ hassio_api: true
 hassio_role: default
 services:
   - mqtt:want
+map:
+  - addon_config:rw
 options:
   remko:
     base_url: https://smartweb.remko.media/
     overview_url: ""
     device_url: ""
-    credentials_file: /data/credentials.json
+    credentials_file: /config/credentials.json
     username: ""
     password: ""
     device_name: ""
