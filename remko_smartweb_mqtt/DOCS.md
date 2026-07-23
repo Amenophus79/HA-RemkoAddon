@@ -12,7 +12,7 @@ The add-on can read credentials from a separate JSON file. By default it looks f
 /config/credentials.json
 ```
 
-In Home Assistant this path maps to `/addon_configs/<repository>_remko_smartweb_mqtt/credentials.json` on the host. Use `credentials.example.json` as the template. Real `credentials.json` files are ignored by Git and must not be committed.
+In Home Assistant this path maps to the app-specific config folder on the host, for example `/app_configs/<repository>_remko_smartweb_mqtt/credentials.json` on current versions or `/addon_configs/<repository>_remko_smartweb_mqtt/credentials.json` on older installations. Use `credentials.example.json` as the template. Real `credentials.json` files are ignored by Git and must not be committed.
 
 ```json
 {

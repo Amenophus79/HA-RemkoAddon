@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.6
+
+- Uses the current Home Assistant app config map type `app_config:rw` instead of legacy `addon_config:rw`.
+- Clarifies that the credentials file is still mounted as `/config/credentials.json` inside the app container.
+
 ## 0.2.5
 
 - Fixes Home Assistant option validation by using non-optional schema types for options that have visible default values.

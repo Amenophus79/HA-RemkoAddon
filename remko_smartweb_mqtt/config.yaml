@@ -1,5 +1,5 @@
 name: REMKO SmartWeb MQTT
-version: "0.2.5"
+version: "0.2.6"
 slug: remko_smartweb_mqtt
 description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
 arch:
@@ -14,7 +14,7 @@ hassio_role: default
 services:
   - mqtt:want
 map:
-  - addon_config:rw
+  - app_config:rw
 options:
   remko:
     base_url: https://smartweb.remko.media/
