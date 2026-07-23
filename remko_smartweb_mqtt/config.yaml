@@ -1,5 +1,5 @@
 name: REMKO SmartWeb MQTT
-version: "0.2.1"
+version: "0.2.2"
 slug: remko_smartweb_mqtt
 description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
 arch:
@@ -52,8 +52,8 @@ options:
       - Hybrid
       - Fastheating
       - Vacation
-    min_temperature: 10
-    max_temperature: 60
+    min_temperature: 10.0
+    max_temperature: 60.0
     temperature_step: 0.5
   selectors:
     username_input: ""
