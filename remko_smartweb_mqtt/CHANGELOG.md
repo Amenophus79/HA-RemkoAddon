@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.8
+
+- Simplifies the Home Assistant configuration UI to the fields that normally need user input: device URL, credentials file, username, and password.
+- Keeps REMKO URLs, device name, MQTT settings, controls, and selectors as internal defaults so they no longer appear as required selector fields in the UI.
+- Leaves active operating mode detection to the scraper fallback instead of exposing a CSS selector default.
+
+## 0.2.7
+
+- Replaces default CSS id selectors such as `#RoomValue` with YAML-friendly attribute selectors such as `[id='RoomValue']`.
+- Keeps the same REMKO DOM targets while avoiding `#` comment parsing issues in YAML editors.
+
 ## 0.2.6
 
 - Uses the current Home Assistant app config map type `app_config:rw` instead of legacy `addon_config:rw`.
