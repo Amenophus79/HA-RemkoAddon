@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -8,10 +9,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remko_smartweb_mqtt"))
 
+from remko_smartweb_mqtt import APP_VERSION
 from remko_smartweb_mqtt.config import ConfigError, ensure_credentials_template, load_options
 
 
 class ConfigTests(unittest.TestCase):
+    def test_package_version_matches_addon_config_version(self) -> None:
+        config_path = Path(__file__).resolve().parents[1] / "remko_smartweb_mqtt" / "config.yaml"
+        config_text = config_path.read_text(encoding="utf-8")
+        match = re.search(r'^version:\s*"([^"]+)"', config_text, re.MULTILINE)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(APP_VERSION, match.group(1))
+
     def test_ensure_credentials_template_uses_configured_credentials_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

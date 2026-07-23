@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Retries MQTT startup instead of exiting when the broker name is temporarily unavailable.
+- Tries Home Assistant Mosquitto hostname aliases when `core-mosquitto` cannot be resolved.
+- Updates the internal MQTT discovery software version to match the add-on version.
+
 ## 0.3.0
 
 - Creates `/config/credentials.example.json` on app start if it does not exist yet.

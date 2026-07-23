@@ -82,21 +82,21 @@ Useful examples:
 
 ```yaml
 selectors:
-  username_input: "input#benutzer"
-  password_input: "input#password"
-  login_button: "button#login_do"
-  temperature_top: "#RoomValue"
-  temperature_bottom: "#IndoorValue"
-  target_temperature: "#ID1333_000_000_value"
-  operating_mode: "#ID1192_000_000_value"
-  operating_mode_button: "#ID1192_000_button"
-  target_temperature_button: "#ID1333_000_button"
-  timer_button: "#ID1404_000_button"
+  username_input: "[id='benutzer']"
+  password_input: "[id='password']"
+  login_button: "[id='login_do']"
+  temperature_top: "[id='RoomValue']"
+  temperature_bottom: "[id='IndoorValue']"
+  target_temperature: "[id='ID1333_000_000_value']"
+  operating_mode: "[id='ID1192_000_000_value']"
+  operating_mode_button: "[id='ID1192_000_button']"
+  target_temperature_button: "[id='ID1333_000_button']"
+  timer_button: "[id='ID1404_000_button']"
 ```
 
 ## MQTT broker
 
-Set `mqtt.host` to `auto` to use the Supervisor MQTT service when available. Otherwise set the broker host, port, username, and password manually.
+Set `mqtt.host` to `auto` to use the Supervisor MQTT service when available. If `core-mosquitto` is reported but cannot be resolved, the add-on also tries known Home Assistant Mosquitto aliases and retries the MQTT connection every 30 seconds instead of exiting. Otherwise set the broker host, port, username, and password manually.
 
 ## Tests without installing the add-on
 

@@ -15,6 +15,7 @@ from .mqtt_bridge import MqttBridge
 from .smartweb import RemkoSmartWebClient, SmartWebError
 
 LOGGER = logging.getLogger(__name__)
+MQTT_CONNECT_RETRY_SECONDS = 30
 
 
 def main() -> None:
@@ -44,10 +45,11 @@ def main() -> None:
     ha_log = HomeAssistantLogNotifier(options)
     poll_interval = int(options["remko"]["poll_interval_minutes"]) * 60
 
-    mqtt_bridge.connect()
-    next_poll = 0.0
-
     try:
+        if not connect_mqtt_with_retry(mqtt_bridge, stop):
+            return
+        next_poll = 0.0
+
         while not stop.requested:
             command_processed = process_pending_commands(
                 command_queue,
@@ -81,6 +83,33 @@ def main() -> None:
     finally:
         smartweb.close()
         mqtt_bridge.close()
+
+
+def connect_mqtt_with_retry(
+    mqtt_bridge: MqttBridge,
+    stop: "StopFlag",
+    retry_seconds: int = MQTT_CONNECT_RETRY_SECONDS,
+) -> bool:
+    while not stop.requested:
+        try:
+            mqtt_bridge.connect()
+            return True
+        except Exception:
+            LOGGER.exception(
+                "MQTT connection failed; retrying in %s seconds",
+                retry_seconds,
+            )
+            sleep_until_stopped(stop, retry_seconds)
+    return False
+
+
+def sleep_until_stopped(stop: "StopFlag", seconds: int) -> None:
+    deadline = time.monotonic() + seconds
+    while not stop.requested:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(1, remaining))
 
 
 def process_pending_commands(

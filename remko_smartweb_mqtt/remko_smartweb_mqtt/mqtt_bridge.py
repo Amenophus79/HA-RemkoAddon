@@ -17,6 +17,14 @@ from .models import Command, HeatPumpState
 
 LOGGER = logging.getLogger(__name__)
 DEGREE_C = "\u00b0C"
+MOSQUITTO_HOST_ALIASES = {
+    "core-mosquitto": ["core-mosquitto.local.hass.io", "addon_core_mosquitto"],
+    "addon_core_mosquitto": ["core-mosquitto", "core-mosquitto.local.hass.io"],
+}
+
+
+class MqttConnectionError(ConnectionError):
+    """Raised when no configured MQTT broker endpoint can be reached."""
 
 
 class MqttBridge:
@@ -30,6 +38,10 @@ class MqttBridge:
         self.port = int(mqtt_options["port"])
         self.username = mqtt_options.get("username") or ""
         self.password = mqtt_options.get("password") or ""
+        self.host_candidates = mqtt_host_candidates(
+            self.host,
+            extra_hosts=mqtt_options.get("_host_candidates", []),
+        )
         self.topic_prefix = strip_topic(options["mqtt"]["topic_prefix"], "remko")
         self.discovery_prefix = strip_topic(
             options["mqtt"]["discovery_prefix"],
@@ -56,9 +68,34 @@ class MqttBridge:
         self.client.on_message = self._on_message
 
     def connect(self) -> None:
-        LOGGER.info("Connecting to MQTT broker %s:%s", self.host, self.port)
-        self.client.connect(self.host, self.port, keepalive=60)
-        self.client.loop_start()
+        last_error: BaseException | None = None
+        for host in self.host_candidates:
+            LOGGER.info("Connecting to MQTT broker %s:%s", host, self.port)
+            try:
+                result = self.client.connect(host, self.port, keepalive=60)
+            except Exception as exc:
+                last_error = exc
+                LOGGER.warning(
+                    "MQTT broker %s:%s is not reachable: %s",
+                    host,
+                    self.port,
+                    exc,
+                )
+                continue
+
+            if result != mqtt.MQTT_ERR_SUCCESS:
+                last_error = MqttConnectionError(
+                    f"MQTT client returned error code {result} for {host}:{self.port}"
+                )
+                LOGGER.warning("%s", last_error)
+                continue
+
+            self.host = host
+            self.client.loop_start()
+            return
+
+        hosts = ", ".join(f"{host}:{self.port}" for host in self.host_candidates)
+        raise MqttConnectionError(f"Could not connect to MQTT broker candidates: {hosts}") from last_error
 
     def close(self) -> None:
         try:
@@ -344,15 +381,23 @@ class MqttBridge:
         if str(resolved.get("host", "")).lower() not in {"", "auto"}:
             return resolved
 
+        fallback_hosts = [
+            os.environ.get("MQTT_HOST"),
+            "core-mosquitto",
+            "core-mosquitto.local.hass.io",
+            "addon_core_mosquitto",
+        ]
         service_data = read_supervisor_mqtt_service()
         if service_data:
             resolved.update({key: value for key, value in service_data.items() if value})
+            resolved["_host_candidates"] = fallback_hosts
             return resolved
 
         resolved["host"] = os.environ.get("MQTT_HOST") or "core-mosquitto"
         resolved["port"] = int(os.environ.get("MQTT_PORT") or resolved.get("port") or 1883)
         resolved["username"] = os.environ.get("MQTT_USERNAME") or resolved.get("username") or ""
         resolved["password"] = os.environ.get("MQTT_PASSWORD") or resolved.get("password") or ""
+        resolved["_host_candidates"] = fallback_hosts
         return resolved
 
 
@@ -388,6 +433,25 @@ def read_supervisor_mqtt_service() -> dict[str, Any] | None:
 def strip_topic(value: str, default: str) -> str:
     stripped = str(value or "").strip().strip("/")
     return stripped or default
+
+
+def mqtt_host_candidates(host: str, extra_hosts: list[str | None] | tuple[str | None, ...] = ()) -> list[str]:
+    candidates: list[str] = []
+
+    def add(candidate: str | None) -> None:
+        normalized = str(candidate or "").strip()
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+
+    add(host)
+    for candidate in MOSQUITTO_HOST_ALIASES.get(str(host or "").strip(), []):
+        add(candidate)
+    for candidate in extra_hosts:
+        add(candidate)
+        for alias in MOSQUITTO_HOST_ALIASES.get(str(candidate or "").strip(), []):
+            add(alias)
+
+    return candidates
 
 
 def slugify(value: str) -> str:
