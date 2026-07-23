@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from .config import ConfigError, ensure_credentials_template, load_options
-from .feedback import AVAILABLE, ERROR, UNAVAILABLE
+from .feedback import AVAILABLE, BUSY, ERROR, UNAVAILABLE
 from .homeassistant_log import HomeAssistantLogNotifier
 from .models import Command
 from .modes import canonicalize_mode
@@ -50,8 +50,14 @@ def main() -> None:
         if not connect_mqtt_with_retry(mqtt_bridge, stop):
             return
         next_poll = 0.0
+        next_command = 0.0
 
         while not stop.requested:
+            now = time.monotonic()
+            if now < next_command:
+                sleep_until_stopped(stop, min(1, next_command - now))
+                continue
+
             command_processed = process_pending_commands(
                 command_queue,
                 smartweb,
@@ -59,9 +65,16 @@ def main() -> None:
                 options,
             )
 
-            now = time.monotonic()
             if command_processed:
-                next_poll = now + command_settle_seconds(options)
+                cooldown = command_settle_seconds(options)
+                ready_at = time.monotonic() + cooldown
+                next_command = ready_at
+                next_poll = ready_at
+                mqtt_bridge.publish_feedback(
+                    BUSY,
+                    f"REMKO command sent; waiting {cooldown} seconds for the SmartWeb stick",
+                    available=True,
+                )
                 continue
 
             if now >= next_poll:
@@ -123,22 +136,20 @@ def process_pending_commands(
     mqtt_bridge: MqttBridge,
     options: dict[str, Any],
 ) -> bool:
-    processed = False
-    while True:
-        try:
-            command = command_queue.get_nowait()
-        except queue.Empty:
-            return processed
+    try:
+        command = command_queue.get_nowait()
+    except queue.Empty:
+        return False
 
-        try:
-            optimistic_patch = apply_command(command, smartweb, options)
-            if optimistic_patch:
-                mqtt_bridge.publish_optimistic_state(**optimistic_patch)
-            processed = True
-        except Exception as exc:
-            LOGGER.exception("Failed to apply command %s", command)
-            mqtt_bridge.publish_error(exc)
-            mqtt_bridge.publish_feedback(ERROR, str(exc), available=False)
+    try:
+        optimistic_patch = apply_command(command, smartweb, options)
+        if optimistic_patch:
+            mqtt_bridge.publish_optimistic_state(**optimistic_patch)
+    except Exception as exc:
+        LOGGER.exception("Failed to apply command %s", command)
+        mqtt_bridge.publish_error(exc)
+        mqtt_bridge.publish_feedback(ERROR, str(exc), available=False)
+    return True
 
 
 def apply_command(
@@ -223,7 +234,8 @@ def mode_to_power(mode: str | None) -> str | None:
 
 def command_settle_seconds(options: dict[str, Any]) -> int:
     retry_seconds = int(options["remko"].get("mode_set_retry_seconds") or 0)
-    return max(COMMAND_SETTLE_SECONDS, retry_seconds)
+    cooldown_seconds = int(options["remko"].get("command_cooldown_seconds") or 0)
+    return max(COMMAND_SETTLE_SECONDS, retry_seconds, cooldown_seconds)
 
 
 class StopFlag:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4
+
+- Adds a configurable command cooldown after SmartWeb writes, defaulting to 90 seconds.
+- Processes only one queued MQTT command per cooldown window so the REMKO stick is not hammered while busy.
+- Publishes `busy` feedback during the cooldown and pauses SmartWeb polling until the stick should be responsive again.
+
 ## 0.3.3
 
 - Publishes an optimistic full MQTT state after successful control commands so Home Assistant controls do not jump back to a stale SmartWeb value.

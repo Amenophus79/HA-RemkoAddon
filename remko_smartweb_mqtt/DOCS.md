@@ -79,6 +79,8 @@ Without dedicated SmartWeb power buttons, `power/set OFF` sets operating mode `O
 
 The Home Assistant `Betrieb` switch is therefore only a convenience alias for the operating mode. The canonical control for this REMKO screen is the `Betriebsmodus` select entity.
 
+After every command the add-on publishes a `busy` feedback state and waits `remko.command_cooldown_seconds` seconds before polling SmartWeb again or sending the next queued MQTT command. The default is `90` seconds because the REMKO WiFi stick can become temporarily unresponsive after parameter changes.
+
 For combined commands:
 
 ```text

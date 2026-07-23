@@ -44,6 +44,7 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "ignore_zero_temperatures": True,
         "mode_set_attempts": 3,
         "mode_set_retry_seconds": 20,
+        "command_cooldown_seconds": 90,
         "power_on_mode": "Automatic",
         "homeassistant_log": True,
         "homeassistant_log_logger": "remko_smartweb_mqtt",
@@ -196,6 +197,8 @@ def validate_options(options: dict[str, Any]) -> None:
         raise ConfigError("mode_set_attempts must be at least 1")
     if int(remko["mode_set_retry_seconds"]) < 0:
         raise ConfigError("mode_set_retry_seconds must not be negative")
+    if int(remko["command_cooldown_seconds"]) < 0:
+        raise ConfigError("command_cooldown_seconds must not be negative")
     controls = options["controls"]
     if float(controls["min_temperature"]) >= float(controls["max_temperature"]):
         raise ConfigError("min_temperature must be lower than max_temperature")
