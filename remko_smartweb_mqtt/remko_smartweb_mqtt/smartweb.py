@@ -48,6 +48,8 @@ from .parsing import (
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_USERNAME_SELECTORS = [
+    "input#benutzer",
+    "input[name='name']",
     "input[type='email']",
     "input[name='email']",
     "input[name='username']",
@@ -57,11 +59,13 @@ DEFAULT_USERNAME_SELECTORS = [
     "input[type='text']",
 ]
 DEFAULT_PASSWORD_SELECTORS = [
+    "input[name='passwort']",
     "input[type='password']",
     "input[name='password']",
     "input#password",
 ]
 DEFAULT_LOGIN_SELECTORS = [
+    "button#login_do",
     "button[type='submit']",
     "input[type='submit']",
     "button.login",
@@ -294,11 +298,13 @@ class RemkoSmartWebClient:
         options.add_argument("--no-sandbox")
         options.add_argument("--window-size=1440,1200")
         options.add_argument("--lang=de-DE")
+        options.page_load_strategy = "none"
 
         chromedriver = shutil.which("chromedriver")
         service = Service(chromedriver) if chromedriver else Service()
         self._driver = webdriver.Chrome(service=service, options=options)
         self._driver.set_page_load_timeout(self._timeout)
+        self._driver.set_script_timeout(min(self._timeout, 30))
         return self._driver
 
     def _open_device_page(self) -> None:
@@ -308,21 +314,31 @@ class RemkoSmartWebClient:
         device_url = str(self._remko.get("device_url") or "").strip()
         base_url = str(self._remko["base_url"]).strip()
         LOGGER.info("Opening REMKO SmartWeb entry page: %s", overview_url or base_url)
-        driver.get(overview_url or base_url)
+        self._open_url(overview_url or base_url)
         self._wait_for_page()
         self._login_if_needed()
 
         if device_url:
-            driver.switch_to.default_content()
-            LOGGER.info("Opening configured REMKO device URL: %s", device_url)
-            driver.get(device_url)
-            self._wait_for_device_screen(str(self._remko["device_name"]).strip())
-            return
+            device_name = str(self._remko["device_name"]).strip()
+            last_error: SmartWebError | None = None
+            for candidate_url in device_url_candidates(device_url):
+                driver.switch_to.default_content()
+                LOGGER.info("Opening configured REMKO device URL: %s", candidate_url)
+                self._open_url(candidate_url, timeout=min(self._timeout, 30))
+                try:
+                    self._wait_for_device_screen(device_name)
+                    return
+                except SmartWebError as exc:
+                    last_error = exc
+                    LOGGER.info("REMKO device URL did not expose the detail screen: %s", exc)
+            if last_error is not None:
+                raise last_error
+            raise SmartWebError("No REMKO device URL candidate was available")
 
         if overview_url:
             driver.switch_to.default_content()
             LOGGER.info("Opening REMKO overview URL: %s", overview_url)
-            driver.get(overview_url)
+            self._open_url(overview_url)
             self._wait_for_page()
 
         device_selector = self._selectors.get("device_link")
@@ -389,29 +405,129 @@ class RemkoSmartWebClient:
         password_el.clear()
         password_el.send_keys(password)
 
-        login_selector = self._selectors.get("login_button")
-        if login_selector:
-            self._click_selector(login_selector)
-        else:
-            login_button = self._find_first(
-                configured="",
-                defaults=DEFAULT_LOGIN_SELECTORS,
-                timeout=3,
-                visible=True,
+        ajax_result = self._submit_login_via_ajax(username, password)
+        if bool(ajax_result.get("submitted")):
+            LOGGER.info(
+                "REMKO SmartWeb AJAX login submitted: http_status=%s response_status=%s redirect=%s",
+                ajax_result.get("http_status"),
+                ajax_result.get("response_status"),
+                ajax_result.get("redirect_url"),
             )
-            if login_button is not None:
-                self._click_element(login_button)
+            if ajax_result.get("response_status") == "error":
+                message = clean_value(str(ajax_result.get("message") or ""))
+                raise SmartWebError(
+                    "REMKO SmartWeb rejected the login"
+                    + (f": {message}" if message else ". Check the configured credentials.")
+                )
+        else:
+            LOGGER.info("REMKO SmartWeb AJAX login unavailable; falling back to UI submit")
+            login_selector = self._selectors.get("login_button")
+            if login_selector:
+                login_button = self._find(login_selector)
+                self._click_element_with_script(login_button)
             else:
-                password_el.send_keys(Keys.ENTER)
+                login_button = self._find_first(
+                    configured="",
+                    defaults=DEFAULT_LOGIN_SELECTORS,
+                    timeout=3,
+                    visible=True,
+                )
+                if login_button is not None:
+                    self._click_element_with_script(login_button)
+                else:
+                    password_el.send_keys(Keys.ENTER)
 
-        self._wait_for_page()
+        LOGGER.info("REMKO SmartWeb login submitted")
+        time.sleep(2)
+        if not bool(ajax_result.get("submitted")) and self._password_input_present():
+            try:
+                password_el.send_keys(Keys.ENTER)
+                LOGGER.info("Login form still visible after button click; submitted via password field")
+            except WebDriverException:
+                LOGGER.debug("Could not submit login via password field fallback", exc_info=True)
+        self._wait_for_login_transition()
+        self._wait_after_login()
+
+    def _wait_for_login_transition(self) -> None:
         try:
             WebDriverWait(self._ensure_driver(), self._timeout).until_not(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
             )
         except TimeoutException:
-            LOGGER.debug("Password input is still present after login; continuing anyway")
+            raise SmartWebError(
+                "REMKO SmartWeb login did not complete. Check credentials and SmartWeb availability. "
+                f"{self._page_diagnostics(str(self._remko.get('device_name') or '').strip())}"
+            ) from None
+        LOGGER.info("REMKO SmartWeb login transition completed")
+
+    def _wait_after_login(self) -> None:
+        if str(self._remko.get("device_url") or "").strip():
+            LOGGER.info("Direct REMKO device URL configured; skipping overview wait after login")
+            return
         self._wait_for_overview_screen()
+
+    def _submit_login_via_ajax(self, username: str, password: str) -> dict[str, Any]:
+        script = """
+            const username = arguments[0];
+            const password = arguments[1];
+            const done = arguments[2];
+            const form = document.querySelector("form.form-send") ||
+                document.querySelector("form[action='/login_do']") ||
+                document.querySelector("form[action$='login_do']");
+            if (!form || !window.fetch) {
+                done({submitted: false, reason: "no_ajax_form"});
+                return;
+            }
+            const action = form.getAttribute("action") || "/login_do";
+            const endpoint = action.startsWith("/rest") ? action : `/rest${action}`;
+            const params = new URLSearchParams();
+            params.set("name", username);
+            params.set("passwort", password);
+
+            fetch(endpoint, {
+                method: "POST",
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                body: params.toString()
+            }).then(async (response) => {
+                const text = await response.text();
+                let payload = null;
+                try {
+                    payload = JSON.parse(text);
+                } catch (error) {
+                    payload = null;
+                }
+                const redirectUrl = payload && payload.url ? payload.url : null;
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+                }
+                done({
+                    submitted: true,
+                    http_status: response.status,
+                    response_status: payload && payload.status ? payload.status : null,
+                    redirect_url: redirectUrl,
+                    message: payload ? [payload.message_header, payload.message_content]
+                        .filter(Boolean)
+                        .join(" ")
+                        .replace(/\\s+/g, " ")
+                        .trim() : null
+                });
+            }).catch((error) => {
+                done({submitted: false, reason: String(error && error.message ? error.message : error)});
+            });
+        """
+        try:
+            result = self._ensure_driver().execute_async_script(script, username, password)
+        except WebDriverException:
+            LOGGER.debug("REMKO SmartWeb AJAX login failed", exc_info=True)
+            return {"submitted": False, "reason": "webdriver_error"}
+        if isinstance(result, dict):
+            return result
+        return {"submitted": False, "reason": "unexpected_result"}
 
     def _read_named_float(
         self,
@@ -526,6 +642,12 @@ class RemkoSmartWebClient:
                         continue
             time.sleep(0.25)
         return None
+
+    def _password_input_present(self) -> bool:
+        try:
+            return bool(self._ensure_driver().find_elements(By.CSS_SELECTOR, "input[type='password']"))
+        except WebDriverException:
+            return False
 
     def _find_number_input_near(
         self,
@@ -775,6 +897,12 @@ class RemkoSmartWebClient:
         except (ElementClickInterceptedException, WebDriverException):
             driver.execute_script("arguments[0].click();", element)
 
+    def _click_element_with_script(self, element: WebElement) -> None:
+        self._ensure_driver().execute_script(
+            "arguments[0].scrollIntoView({block: 'center'}); arguments[0].click();",
+            element,
+        )
+
     def _set_select_or_combobox(self, element: WebElement, value: str) -> None:
         tag_name = element.tag_name.lower()
         if tag_name == "select":
@@ -804,11 +932,37 @@ class RemkoSmartWebClient:
                 self._click_text(["Speichern", "Save", "OK", "Uebernehmen", "Übernehmen"], timeout=2)
         self._wait_for_page()
 
-    def _wait_for_page(self) -> None:
+    def _open_url(self, url: str, timeout: int | None = None) -> None:
         driver = self._ensure_driver()
-        WebDriverWait(driver, self._timeout).until(
-            lambda current: current.execute_script("return document.readyState") == "complete"
-        )
+        original_timeout = self._timeout
+        load_timeout = timeout or original_timeout
+        driver.set_page_load_timeout(load_timeout)
+        try:
+            driver.get(url)
+        except TimeoutException:
+            LOGGER.info(
+                "Page load for %s did not complete after %s seconds; continuing with DOM checks",
+                url,
+                load_timeout,
+            )
+        finally:
+            driver.set_page_load_timeout(original_timeout)
+
+    def _wait_for_page(self, timeout: int | None = None, required: bool = True) -> None:
+        driver = self._ensure_driver()
+        wait_timeout = timeout or self._timeout
+        try:
+            WebDriverWait(driver, wait_timeout).until(
+                lambda current: current.execute_script("return document.readyState")
+                in ("interactive", "complete")
+            )
+        except TimeoutException:
+            if required:
+                raise
+            LOGGER.info(
+                "Document readyState did not reach interactive after %s seconds; continuing",
+                wait_timeout,
+            )
         time.sleep(0.5)
 
     def _wait_for_overview_screen(self) -> None:
@@ -832,7 +986,7 @@ class RemkoSmartWebClient:
     def _wait_for_device_screen(self, device_name: str) -> None:
         driver = self._ensure_driver()
         driver.switch_to.default_content()
-        self._wait_for_page()
+        self._wait_for_page(timeout=min(self._timeout, 10), required=False)
         try:
             WebDriverWait(driver, self._timeout).until(
                 lambda _driver: self._focus_device_screen_if_present()
@@ -847,11 +1001,38 @@ class RemkoSmartWebClient:
             ):
                 raise SmartWebError(
                     f"Timed out opening '{device_name}'. The device may be offline or "
-                    "the overview action icon may be disabled."
+                    f"the overview action icon may be disabled. {self._page_diagnostics(device_name)}"
                 ) from exc
             raise SmartWebError(
-                f"Timed out waiting for the REMKO detail screen for '{device_name}'"
+                f"Timed out waiting for the REMKO detail screen for '{device_name}'. "
+                f"{self._page_diagnostics(device_name)}"
             ) from exc
+
+    def _page_diagnostics(self, device_name: str) -> str:
+        driver = self._ensure_driver()
+        driver.switch_to.default_content()
+        body_text = self._body_text()
+        lower_text = body_text.lower()
+        values: dict[str, str | int | bool] = {
+            "body_length": len(body_text),
+            "has_login": "login" in lower_text or "password" in lower_text,
+            "has_overview": "device-overview" in lower_text or "product filter" in lower_text,
+            "has_device_name": bool(device_name and device_name.lower() in lower_text),
+        }
+        for key, getter in {
+            "url": lambda: driver.current_url,
+            "title": lambda: driver.title,
+            "ready_state": lambda: driver.execute_script("return document.readyState"),
+            "iframe_count": lambda: len(driver.find_elements(By.CSS_SELECTOR, "iframe")),
+            "has_room_value": lambda: bool(driver.find_elements(By.CSS_SELECTOR, "#RoomValue")),
+            "has_indoor_value": lambda: bool(driver.find_elements(By.CSS_SELECTOR, "#IndoorValue")),
+            "has_mode_value": lambda: bool(driver.find_elements(By.CSS_SELECTOR, "#ID1192_000_000_value")),
+        }.items():
+            try:
+                values[key] = getter()
+            except WebDriverException:
+                values[key] = "unavailable"
+        return "Diagnostics: " + ", ".join(f"{key}={value!r}" for key, value in values.items())
 
     def _focus_device_screen_if_present(self) -> bool:
         driver = self._ensure_driver()
@@ -919,6 +1100,25 @@ def parse_selector(selector: str) -> tuple[str, str]:
     if selector.startswith("css:"):
         return By.CSS_SELECTOR, selector.removeprefix("css:").strip()
     return By.CSS_SELECTOR, selector
+
+
+def device_url_candidates(device_url: str) -> list[str]:
+    clean_url = str(device_url or "").strip()
+    if not clean_url:
+        return []
+    candidates = [clean_url]
+    if "/fernbedienung/" in clean_url:
+        fullscreen_url = clean_url.replace("/fernbedienung/", "/fernbedienung_vollbild/")
+        candidates.insert(0, fullscreen_url)
+    elif "/fernbedienung_vollbild/" in clean_url:
+        standard_url = clean_url.replace("/fernbedienung_vollbild/", "/fernbedienung/")
+        candidates.append(standard_url)
+
+    unique_candidates: list[str] = []
+    for candidate in candidates:
+        if candidate not in unique_candidates:
+            unique_candidates.append(candidate)
+    return unique_candidates
 
 
 def has_detail_values(state: HeatPumpState) -> bool:

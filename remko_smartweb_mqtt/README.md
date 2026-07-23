@@ -65,7 +65,7 @@ The JSON command topic accepts payloads like:
 - `remko.username`: REMKO SmartWeb login user, unless provided by the credentials file.
 - `remko.password`: REMKO SmartWeb login password, unless provided by the credentials file.
 - `remko.device_name`: Name shown on the device overview page, unless provided by the credentials file.
-- `remko.device_url`: Optional direct remote-control URL behind the overview house icon. Start with the normal `fernbedienung/<device-id>` URL; test `fernbedienung_vollbild/<device-id>` only if it stays on the pump view after login.
+- `remko.device_url`: Optional direct remote-control URL behind the overview house icon. Prefer `fernbedienung_vollbild/<device-id>` for headless polling; when the normal `fernbedienung/<device-id>` URL is configured, the add-on tries the fullscreen variant first.
 - `remko.poll_interval_minutes`: Poll interval, default `15`.
 - `remko.request_timeout_seconds`: Page and connection timeout, default `90`.
 - `remko.mode_set_attempts`: Verified retries for setting operating mode, default `3`.

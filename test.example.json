@@ -2,7 +2,7 @@
   "remko": {
     "base_url": "https://smartweb.remko.media/",
     "overview_url": "",
-    "device_url": "https://smartweb.remko.media/geraet/fernbedienung/<device-id>",
+    "device_url": "https://smartweb.remko.media/geraet/fernbedienung_vollbild/<device-id>",
     "credentials_file": "",
     "username": "your-remko-login@example.com",
     "password": "your-remko-password",

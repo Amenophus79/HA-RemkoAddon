@@ -32,16 +32,16 @@ Use `credentials.example.json` as the template. Real `credentials.json` files ar
 
 Values in the credentials file override the same values from the Home Assistant add-on options.
 
-If you know the remote-control URL behind the house icon, set `remko.device_url`. The add-on will still log in first, then open this URL directly instead of relying on the overview row click. The normal remote-control URL is the safest first choice:
-
-```text
-https://smartweb.remko.media/geraet/fernbedienung/<device-id>
-```
-
-The fullscreen URL can also be tested if SmartWeb keeps the session on the pump view:
+If you know the remote-control URL behind the house icon, set `remko.device_url`. The add-on will still log in first, then open this URL directly instead of relying on the overview row click. Prefer the fullscreen URL for headless polling:
 
 ```text
 https://smartweb.remko.media/geraet/fernbedienung_vollbild/<device-id>
+```
+
+When the normal URL is configured, the add-on tries the fullscreen variant first and then falls back to the configured URL:
+
+```text
+https://smartweb.remko.media/geraet/fernbedienung/<device-id>
 ```
 
 ## Behavior
