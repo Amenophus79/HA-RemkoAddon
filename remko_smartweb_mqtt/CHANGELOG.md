@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.5
+
+- Fixes Home Assistant option validation by using non-optional schema types for options that have visible default values.
+- Keeps empty visible fields such as `device_url`, `username`, and `password` saveable.
+
 ## 0.2.4
 
 - Adds missing changelog entries for the Home Assistant update dialog.
