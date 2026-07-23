@@ -42,6 +42,23 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(extract_label_value(text, STATUS_LABELS), "Heizen")
         self.assertEqual(normalize_power("Heizen"), "ON")
 
+    def test_extracts_remko_tile_values_with_numbers_before_labels(self) -> None:
+        text = """
+        52,0°C
+        Actual Temperature (Top)
+        51,5°C
+        Actual Temperature (Bottom)
+        WW Soll-Temp.
+        50,0°C
+        Betriebsart
+        Automatisch
+        """
+
+        self.assertEqual(extract_label_float(text, TOP_LABELS), 52.0)
+        self.assertEqual(extract_label_float(text, BOTTOM_LABELS), 51.5)
+        self.assertEqual(extract_label_float(text, TARGET_LABELS), 50.0)
+        self.assertEqual(extract_label_value(text, MODE_LABELS), "Automatisch")
+
     def test_handles_unavailable_overview_without_fake_temperatures(self) -> None:
         overview = """
         Device-Overview
@@ -59,6 +76,10 @@ class ParsingTests(unittest.TestCase):
     def test_formats_numbers_for_smartweb_inputs(self) -> None:
         self.assertEqual(format_number(50.0), "50")
         self.assertEqual(format_number(48.5), "48.5")
+
+    def test_normalizes_remko_mode_power_values(self) -> None:
+        self.assertEqual(normalize_power("Automatic"), "ON")
+        self.assertEqual(normalize_power("Off"), "OFF")
 
 
 if __name__ == "__main__":

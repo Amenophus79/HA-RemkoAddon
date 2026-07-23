@@ -1,5 +1,5 @@
 name: REMKO SmartWeb MQTT
-version: "0.1.0"
+version: "0.2.0"
 slug: remko_smartweb_mqtt
 description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
 arch:
@@ -17,12 +17,19 @@ options:
   remko:
     base_url: https://smartweb.remko.media/
     overview_url: ""
+    device_url: ""
     credentials_file: /data/credentials.json
     username: ""
     password: ""
     device_name: ""
     poll_interval_minutes: 15
     request_timeout_seconds: 90
+    live_value_timeout_seconds: 300
+    live_value_check_interval_seconds: 10
+    ignore_zero_temperatures: true
+    mode_set_attempts: 3
+    mode_set_retry_seconds: 20
+    power_on_mode: Automatic
     homeassistant_log: true
     homeassistant_log_logger: remko_smartweb_mqtt
     homeassistant_notification: true
@@ -37,11 +44,12 @@ options:
     retain_state: false
   controls:
     supported_modes:
-      - Auto
-      - Heizen
-      - Kühlen
-      - Standby
-      - Aus
+      - Off
+      - Automatic
+      - Eco
+      - Hybrid
+      - Fastheating
+      - Vacation
     min_temperature: 10
     max_temperature: 60
     temperature_step: 0.5
@@ -59,18 +67,29 @@ options:
     power_on_button: ""
     power_off_button: ""
     mode_control: ""
+    operating_mode_button: ""
+    active_mode: ""
+    target_temperature_button: ""
+    timer_button: ""
     target_temperature_input: ""
     save_button: ""
 schema:
   remko:
     base_url: url
     overview_url: str
+    device_url: str
     credentials_file: str
     username: str
     password: password
     device_name: str
     poll_interval_minutes: "int(1,1440)"
     request_timeout_seconds: "int(10,300)"
+    live_value_timeout_seconds: "int(0,1800)"
+    live_value_check_interval_seconds: "int(1,300)"
+    ignore_zero_temperatures: bool
+    mode_set_attempts: "int(1,10)"
+    mode_set_retry_seconds: "int(0,300)"
+    power_on_mode: str
     homeassistant_log: bool
     homeassistant_log_logger: str
     homeassistant_notification: bool
@@ -103,6 +122,10 @@ schema:
     power_on_button: str
     power_off_button: str
     mode_control: str
+    operating_mode_button: str
+    active_mode: str
+    target_temperature_button: str
+    timer_button: str
     target_temperature_input: str
     save_button: str
 stage: experimental

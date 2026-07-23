@@ -51,10 +51,12 @@ remko/<device_slug>/temperature/set
 remko/<device_slug>/command/set
 ```
 
+By default, the MQTT power switch uses the operating mode screen: `OFF` selects mode `Off`, while `ON` selects `remko.power_on_mode` (`Automatic` by default).
+
 The JSON command topic accepts payloads like:
 
 ```json
-{"power":"ON","mode":"Heizen","temperature":45}
+{"power":"ON","mode":"Automatic","temperature":45}
 ```
 
 ## Required options
@@ -63,8 +65,12 @@ The JSON command topic accepts payloads like:
 - `remko.username`: REMKO SmartWeb login user, unless provided by the credentials file.
 - `remko.password`: REMKO SmartWeb login password, unless provided by the credentials file.
 - `remko.device_name`: Name shown on the device overview page, unless provided by the credentials file.
+- `remko.device_url`: Optional direct remote-control URL behind the overview house icon. Start with the normal `fernbedienung/<device-id>` URL; test `fernbedienung_vollbild/<device-id>` only if it stays on the pump view after login.
 - `remko.poll_interval_minutes`: Poll interval, default `15`.
 - `remko.request_timeout_seconds`: Page and connection timeout, default `90`.
+- `remko.mode_set_attempts`: Verified retries for setting operating mode, default `3`.
+- `remko.mode_set_retry_seconds`: Pause before each mode verification/retry, default `20`.
+- `remko.power_on_mode`: Mode used by `power/set ON`, default `Automatic`.
 - `remko.homeassistant_log`: Write non-availability/errors to the Home Assistant system log, default `true`.
 - `remko.homeassistant_notification`: Show non-availability/errors as a Home Assistant persistent notification, default `true`.
 
@@ -84,6 +90,8 @@ selectors:
   power_on_button: "xpath://button[contains(., 'Ein')]"
   power_off_button: "xpath://button[contains(., 'Aus')]"
   mode_control: "select[name='mode']"
+  operating_mode_button: "#ID1192_000_button"
+  target_temperature_button: "#ID1333_000_button"
   target_temperature_input: "input[name='targetTemperature']"
   save_button: "button[type='submit']"
 ```

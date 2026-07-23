@@ -32,6 +32,18 @@ Use `credentials.example.json` as the template. Real `credentials.json` files ar
 
 Values in the credentials file override the same values from the Home Assistant add-on options.
 
+If you know the remote-control URL behind the house icon, set `remko.device_url`. The add-on will still log in first, then open this URL directly instead of relying on the overview row click. The normal remote-control URL is the safest first choice:
+
+```text
+https://smartweb.remko.media/geraet/fernbedienung/<device-id>
+```
+
+The fullscreen URL can also be tested if SmartWeb keeps the session on the pump view:
+
+```text
+https://smartweb.remko.media/geraet/fernbedienung_vollbild/<device-id>
+```
+
 ## Behavior
 
 At startup the add-on connects to MQTT and publishes Home Assistant MQTT discovery. It then starts a mandatory headless Chromium session, logs in to `https://smartweb.remko.media/`, selects the configured device name from the overview, and reads:
@@ -58,15 +70,17 @@ Home Assistant can control the heat pump through the discovered MQTT entities. A
 
 ```text
 remko/<device_slug>/power/set        ON or OFF
-remko/<device_slug>/mode/set         Auto, Heizen, Kühlen, Standby, Aus
+remko/<device_slug>/mode/set         Off, Automatic, Eco, Hybrid, Fastheating, Vacation
 remko/<device_slug>/temperature/set  Numeric temperature
 ```
+
+Without dedicated SmartWeb power buttons, `power/set OFF` sets operating mode `Off`; `power/set ON` sets `remko.power_on_mode`, which defaults to `Automatic`.
 
 For combined commands:
 
 ```text
 Topic: remko/<device_slug>/command/set
-Payload: {"power":"ON","mode":"Heizen","temperature":45}
+Payload: {"power":"ON","mode":"Automatic","temperature":45}
 ```
 
 ## Tests without installing the add-on
@@ -118,6 +132,26 @@ The first REMKO login page seen on July 1, 2026 has visible labels `Email*`, `Pa
 The device overview seen on July 1, 2026 shows the pump row as `WIFI Stick - Warmwasserwärmepumpe`. The first action icon in that row is the small house icon. Leave `selectors.device_link` empty first: the add-on will try to find that row from `remko.device_name` and click the first action icon automatically. If the icon is greyed out, SmartWeb appears to consider the device unavailable; the add-on will time out with a clear error and retry on the next poll.
 
 Switching from the overview to the pump screen can take time. Increase `remko.request_timeout_seconds` if your SmartWeb account often needs more than the default `90` seconds.
+
+The remote-control page embeds the actual REMKO app in `iframe#appFrame`. The scraper switches into that frame before reading values.
+
+On the observed SmartWeb SVG view, `#RoomValue` contains the top temperature and `#IndoorValue` contains the bottom temperature. These DOM ids are used automatically before the label-based fallback parser.
+
+The observed button configuration uses these ids:
+
+- `ID1192`: operating mode
+- `ID1333`: desired storage loading temperature
+- `ID1404`: timer
+
+The current operating mode is read automatically from `#ID1192_000_000_value`. For commands, the add-on opens `#ID1192_000_button` and then clicks the requested mode in the second view with six operating-mode buttons: `Off`, `Automatic`, `Eco`, `Hybrid`, `Fastheating`, and `Vacation`. The active mode there is highlighted in green.
+
+In the observed mode editor these options have stable ids: `1192_2` = Off, `1192_3` = Automatic, `1192_9` = Eco, `1192_10` = Hybrid, `1192_11` = Fastheating, and `1192_12` = Vacation. The scraper targets `#modes .mode` first and reads `.mode.selected` when the editor is open.
+
+Mode writes are verified. The add-on clicks the requested mode, waits `remko.mode_set_retry_seconds` seconds, opens the pump view again, and checks whether `#ID1192_000_000_value` confirms the requested mode. If SmartWeb did not accept it yet, the add-on repeats this up to `remko.mode_set_attempts` times. The defaults are three attempts with a 20 second pause.
+
+The desired storage temperature is read automatically from `#ID1333_000_000_value`. For temperature commands, the add-on opens `#ID1333_000_button` before looking for the input control.
+
+Leave `selectors.operating_mode_button`, `selectors.target_temperature_button`, and `selectors.active_mode` empty first; set them only if REMKO changes the ids or the automatic detection is not enough.
 
 For the remaining workflow, send screenshots of:
 

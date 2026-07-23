@@ -62,6 +62,28 @@ class ConfigTests(unittest.TestCase):
 
         self.assertIn("Missing required REMKO option", str(ctx.exception))
 
+    def test_power_on_mode_accepts_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            options_path = Path(temp_dir) / "options.json"
+            options_path.write_text(
+                json.dumps(
+                    {
+                        "remko": {
+                            "credentials_file": "",
+                            "username": "user@example.com",
+                            "password": "secret",
+                            "device_name": "WIFI Stick - Warmwasserwärmepumpe",
+                            "power_on_mode": "Automatisch",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            options = load_options(options_path)
+
+        self.assertEqual(options["remko"]["power_on_mode"], "Automatic")
+
 
 if __name__ == "__main__":
     unittest.main()

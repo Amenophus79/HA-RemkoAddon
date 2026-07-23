@@ -10,6 +10,7 @@ from .config import ConfigError, load_options
 from .feedback import AVAILABLE, ERROR, UNAVAILABLE
 from .homeassistant_log import HomeAssistantLogNotifier
 from .models import Command
+from .modes import canonicalize_mode
 from .mqtt_bridge import MqttBridge
 from .smartweb import RemkoSmartWebClient, SmartWebError
 
@@ -154,9 +155,10 @@ def validate_temperature(value: float, options: dict[str, Any]) -> float:
 
 def validate_mode(value: str, options: dict[str, Any]) -> str:
     supported = [str(mode) for mode in options["controls"]["supported_modes"]]
-    if value not in supported:
-        raise ValueError(f"Mode '{value}' is not one of: {', '.join(supported)}")
-    return value
+    mode = canonicalize_mode(value, supported)
+    if mode:
+        return mode
+    raise ValueError(f"Mode '{value}' is not one of: {', '.join(supported)}")
 
 
 class StopFlag:

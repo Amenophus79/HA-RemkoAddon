@@ -23,6 +23,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from .models import HeatPumpState
+from .modes import (
+    canonicalize_mode,
+    count_visible_modes,
+    mode_click_labels,
+    text_matches_mode,
+)
 from .parsing import (
     BOTTOM_LABELS,
     DETAIL_READY_LABELS,
@@ -67,6 +73,17 @@ DEFAULT_SAVE_SELECTORS = [
     "button.save",
     ".save button",
 ]
+DEFAULT_VALUE_SELECTORS = {
+    "temperature_top": ["#RoomValue"],
+    "temperature_bottom": ["#IndoorValue"],
+    "target_temperature": ["#ID1333_000_000_value", "#TempValue"],
+    "operating_mode": ["#ID1192_000_000_value"],
+}
+DEFAULT_ACTION_SELECTORS = {
+    "operating_mode_button": ["#ID1192_000_button"],
+    "target_temperature_button": ["#ID1333_000_button"],
+    "timer_button": ["#ID1404_000_button"],
+}
 
 class SmartWebError(RuntimeError):
     """Raised when REMKO SmartWeb cannot be read or controlled."""
@@ -75,8 +92,14 @@ class SmartWebError(RuntimeError):
 class RemkoSmartWebClient:
     def __init__(self, options: dict[str, Any]) -> None:
         self._remko = options["remko"]
+        self._controls = options["controls"]
         self._selectors = options["selectors"]
         self._timeout = int(self._remko["request_timeout_seconds"])
+        self._live_value_timeout = int(self._remko["live_value_timeout_seconds"])
+        self._live_value_interval = int(self._remko["live_value_check_interval_seconds"])
+        self._ignore_zero_temperatures = bool(self._remko["ignore_zero_temperatures"])
+        self._mode_set_attempts = int(self._remko["mode_set_attempts"])
+        self._mode_set_retry_seconds = int(self._remko["mode_set_retry_seconds"])
         self._driver: webdriver.Chrome | None = None
 
     def close(self) -> None:
@@ -88,8 +111,20 @@ class RemkoSmartWebClient:
             self._driver = None
 
     def poll(self) -> HeatPumpState:
-        driver = self._ensure_driver()
         self._open_device_page()
+        state = self._read_state()
+        if not has_detail_values(state):
+            raise SmartWebError(
+                "REMKO SmartWeb did not expose heat pump detail values. "
+                "The pump may be unavailable or selectors for this SmartWeb screen are still missing."
+            )
+        if self._looks_like_placeholder_state(state):
+            state = self._wait_for_live_state(state)
+        LOGGER.info("Read REMKO state: %s", state.as_payload())
+        return state
+
+    def _read_state(self) -> HeatPumpState:
+        driver = self._ensure_driver()
         body_text = self._body_text()
 
         power = self._read_named_text("power_state")
@@ -100,9 +135,7 @@ class RemkoSmartWebClient:
         if status is None:
             status = extract_label_value(body_text, STATUS_LABELS)
 
-        mode = self._read_named_text("operating_mode")
-        if mode is None:
-            mode = extract_label_value(body_text, MODE_LABELS)
+        mode = self._read_current_mode(body_text)
 
         state = HeatPumpState(
             temperature_top=self._read_named_float("temperature_top", body_text, TOP_LABELS),
@@ -112,18 +145,44 @@ class RemkoSmartWebClient:
             target_temperature=self._read_named_float(
                 "target_temperature", body_text, TARGET_LABELS
             ),
-            operating_mode=clean_value(mode),
+            operating_mode=canonicalize_mode(
+                mode,
+                [str(item) for item in self._controls.get("supported_modes", [])],
+            )
+            or clean_value(mode),
             status=clean_value(status),
-            power=normalize_power(power, mode, status),
+            power=normalize_power(power, state_mode_to_power(mode), status),
             source_url=driver.current_url,
         )
-        if not has_detail_values(state):
-            raise SmartWebError(
-                "REMKO SmartWeb did not expose heat pump detail values. "
-                "The pump may be unavailable or selectors for this SmartWeb screen are still missing."
-            )
-        LOGGER.info("Read REMKO state: %s", state.as_payload())
         return state
+
+    def _wait_for_live_state(self, initial_state: HeatPumpState) -> HeatPumpState:
+        if self._live_value_timeout == 0:
+            raise SmartWebError(
+                "REMKO SmartWeb still shows placeholder temperatures 0,0 °C. "
+                "The pump data has not refreshed yet."
+            )
+
+        deadline = time.monotonic() + self._live_value_timeout
+        state = initial_state
+        while time.monotonic() < deadline:
+            LOGGER.info(
+                "REMKO SmartWeb still shows placeholder temperatures; waiting %s seconds",
+                self._live_value_interval,
+            )
+            time.sleep(self._live_value_interval)
+            state = self._read_state()
+            if has_detail_values(state) and not self._looks_like_placeholder_state(state):
+                return state
+        raise SmartWebError(
+            "REMKO SmartWeb still shows placeholder temperatures 0,0 °C after "
+            f"{self._live_value_timeout} seconds. The pump data has not refreshed yet."
+        )
+
+    def _looks_like_placeholder_state(self, state: HeatPumpState) -> bool:
+        if not self._ignore_zero_temperatures:
+            return False
+        return state.temperature_top == 0 and state.temperature_bottom == 0
 
     def set_power(self, enabled: bool) -> None:
         self._open_device_page()
@@ -132,21 +191,62 @@ class RemkoSmartWebClient:
         if selector:
             self._click_selector(selector)
         else:
-            labels = ["Ein", "An", "On", "Start"] if enabled else ["Aus", "Off", "Stop"]
-            if not self._click_text(labels):
-                raise SmartWebError(f"No SmartWeb power control found for {labels}")
+            target_mode = str(self._remko["power_on_mode"]) if enabled else "Off"
+            self.set_mode(target_mode)
+            return
         self._save_if_configured()
 
     def set_mode(self, mode: str) -> None:
-        self._open_device_page()
+        supported_modes = [str(item) for item in self._controls.get("supported_modes", [])]
+        desired_mode = canonicalize_mode(mode, supported_modes) or mode
+        last_seen: str | None = None
+
+        for attempt in range(1, self._mode_set_attempts + 1):
+            self._open_device_page()
+            current_mode = self._read_current_mode()
+            last_seen = current_mode
+            if text_matches_mode(current_mode, desired_mode):
+                LOGGER.info("REMKO operating mode is already %s", current_mode)
+                return
+
+            LOGGER.info(
+                "Setting REMKO operating mode to %s, attempt %s/%s",
+                desired_mode,
+                attempt,
+                self._mode_set_attempts,
+            )
+            self._apply_mode_once(desired_mode)
+            if self._mode_set_retry_seconds:
+                time.sleep(self._mode_set_retry_seconds)
+
+            self._open_device_page()
+            confirmed_mode = self._read_current_mode()
+            last_seen = confirmed_mode
+            if text_matches_mode(confirmed_mode, desired_mode):
+                LOGGER.info("REMKO confirmed operating mode %s", confirmed_mode)
+                return
+
+            LOGGER.warning(
+                "REMKO did not confirm operating mode %s after attempt %s; last seen: %s",
+                desired_mode,
+                attempt,
+                confirmed_mode or "unknown",
+            )
+
+        raise SmartWebError(
+            "REMKO did not confirm operating mode "
+            f"'{desired_mode}' after {self._mode_set_attempts} attempts"
+            + (f"; last seen: {last_seen}" if last_seen else "")
+        )
+
+    def _apply_mode_once(self, mode: str) -> None:
         selector = self._selectors.get("mode_control")
         if selector:
             element = self._find(selector)
             self._set_select_or_combobox(element, mode)
         else:
-            if not self._click_text(MODE_LABELS):
-                raise SmartWebError("No SmartWeb mode control found")
-            if not self._click_text([mode]):
+            self._open_operating_mode_selector()
+            if not self._click_mode_option(mode):
                 raise SmartWebError(f"No SmartWeb mode option found for '{mode}'")
         self._save_if_configured()
 
@@ -156,7 +256,10 @@ class RemkoSmartWebClient:
         if selector:
             element = self._find(selector)
         else:
-            element = self._find_number_input_near(TARGET_LABELS)
+            element = self._find_number_input_near(TARGET_LABELS, timeout=3, required=False)
+            if element is None:
+                self._open_target_temperature_editor()
+                element = self._find_number_input_near(TARGET_LABELS)
         value = format_number(temperature)
         element.click()
         element.send_keys(Keys.CONTROL, "a")
@@ -199,13 +302,22 @@ class RemkoSmartWebClient:
 
     def _open_device_page(self) -> None:
         driver = self._ensure_driver()
+        driver.switch_to.default_content()
         overview_url = str(self._remko.get("overview_url") or "").strip()
+        device_url = str(self._remko.get("device_url") or "").strip()
         base_url = str(self._remko["base_url"]).strip()
         driver.get(overview_url or base_url)
         self._wait_for_page()
         self._login_if_needed()
 
+        if device_url:
+            driver.switch_to.default_content()
+            driver.get(device_url)
+            self._wait_for_device_screen(str(self._remko["device_name"]).strip())
+            return
+
         if overview_url:
+            driver.switch_to.default_content()
             driver.get(overview_url)
             self._wait_for_page()
 
@@ -235,6 +347,7 @@ class RemkoSmartWebClient:
         )
 
     def _login_if_needed(self) -> None:
+        self._ensure_driver().switch_to.default_content()
         username = str(self._remko["username"])
         password = str(self._remko["password"])
 
@@ -306,17 +419,74 @@ class RemkoSmartWebClient:
             return parse_float(text)
         return extract_label_float(body_text, labels)
 
+    def _read_current_mode(self, body_text: str | None = None) -> str | None:
+        supported_modes = [str(item) for item in self._controls.get("supported_modes", [])]
+        mode = self._read_named_text("operating_mode")
+        if mode is None:
+            mode = extract_label_value(body_text or self._body_text(), MODE_LABELS)
+        if mode is None:
+            mode = self._read_active_mode_text()
+        return canonicalize_mode(mode, supported_modes) or clean_value(mode)
+
     def _read_named_text(self, selector_name: str) -> str | None:
         selector = self._selectors.get(selector_name)
-        if not selector:
+        selectors = []
+        if selector:
+            selectors.append(selector)
+        selectors.extend(DEFAULT_VALUE_SELECTORS.get(selector_name, []))
+        if not selectors:
             return None
-        try:
-            element = self._find(selector, timeout=5)
-        except TimeoutException:
-            LOGGER.warning("Configured selector '%s' did not match", selector_name)
-            return None
-        text = element.text or element.get_attribute("value") or element.get_attribute("textContent")
-        return clean_value(text)
+
+        for candidate in selectors:
+            try:
+                element = self._find(candidate, timeout=5)
+            except TimeoutException:
+                if candidate == selector:
+                    LOGGER.warning("Configured selector '%s' did not match", selector_name)
+                continue
+            text = (
+                element.text
+                or element.get_attribute("value")
+                or element.get_attribute("textContent")
+            )
+            cleaned = clean_value(text)
+            if cleaned:
+                return cleaned
+        return None
+
+    def _read_active_mode_text(self) -> str | None:
+        selector = self._selectors.get("active_mode")
+        if selector:
+            return self._read_named_text("active_mode")
+        supported_modes = [str(mode) for mode in self._controls.get("supported_modes", [])]
+        script = """
+            const supported = arguments[0].map((value) => value.toLowerCase());
+            const selected = document.querySelector("#modes .mode.selected p, #modes .selected p");
+            if (selected) {
+                return selected.textContent || selected.innerText || "";
+            }
+            const greenish = (element) => {
+                const style = window.getComputedStyle(element);
+                const bg = style.backgroundColor.match(/\\d+/g) || [];
+                const border = style.borderColor.match(/\\d+/g) || [];
+                const colors = [bg, border].filter((parts) => parts.length >= 3);
+                return colors.some(([r, g, b]) => Number(g) > Number(r) + 25 && Number(g) > Number(b) + 15);
+            };
+            const candidates = Array.from(document.querySelectorAll("button,a,[role='button'],div,span"))
+                .filter((element) => greenish(element))
+                .map((element) => (element.innerText || element.textContent || "").replace(/\\s+/g, " ").trim())
+                .filter((text) => !supported.length || supported.some((mode) => {
+                    const lower = text.toLowerCase();
+                    return lower === mode || lower.includes(mode) || mode.includes(lower);
+                }))
+                .filter(Boolean)
+                .sort((a, b) => a.length - b.length);
+            return candidates[0] || null;
+        """
+        active_text = clean_value(
+            str(self._ensure_driver().execute_script(script, supported_modes) or "")
+        )
+        return canonicalize_mode(active_text, supported_modes) or active_text
 
     def _find(self, selector: str, timeout: int | None = None) -> WebElement:
         by, value = parse_selector(selector)
@@ -352,7 +522,13 @@ class RemkoSmartWebClient:
             time.sleep(0.25)
         return None
 
-    def _find_number_input_near(self, labels: list[str]) -> WebElement:
+    def _find_number_input_near(
+        self,
+        labels: list[str],
+        timeout: int | None = None,
+        required: bool = True,
+    ) -> WebElement | None:
+        wait_timeout = timeout or self._timeout
         xpath = (
             "//*["
             + " or ".join(
@@ -364,12 +540,35 @@ class RemkoSmartWebClient:
             + "]/following::input[@type='number' or @type='text'][1]"
         )
         try:
-            return self._find(f"xpath:{xpath}", timeout=5)
+            return self._find(f"xpath:{xpath}", timeout=min(5, wait_timeout))
         except TimeoutException:
-            return self._find("input[type='number'], input[inputmode='decimal'], input[type='text']")
+            try:
+                return self._find(
+                    "input[type='number'], input[inputmode='decimal'], input[type='text']",
+                    timeout=wait_timeout,
+                )
+            except TimeoutException:
+                if required:
+                    raise
+                return None
 
     def _click_selector(self, selector: str) -> None:
         self._click_element(self._find(selector))
+
+    def _click_named_action(self, selector_name: str) -> bool:
+        selectors = []
+        configured = self._selectors.get(selector_name)
+        if configured:
+            selectors.append(configured)
+        selectors.extend(DEFAULT_ACTION_SELECTORS.get(selector_name, []))
+        for selector in selectors:
+            try:
+                self._click_selector(selector)
+                return True
+            except TimeoutException:
+                if selector == configured:
+                    LOGGER.warning("Configured selector '%s' did not match", selector_name)
+        return False
 
     def _click_device_action(self, device_name: str) -> bool:
         script = """
@@ -463,6 +662,90 @@ class RemkoSmartWebClient:
         LOGGER.debug("Device action click result for '%s': %s", device_name, result)
         return bool(result and result.get("clicked"))
 
+    def _open_operating_mode_selector(self) -> None:
+        if not self._click_named_action("operating_mode_button") and not self._click_text(MODE_LABELS):
+            raise SmartWebError("No SmartWeb operating mode tile found")
+        self._wait_for_page()
+        self._wait_for_mode_options()
+
+    def _open_target_temperature_editor(self) -> None:
+        if not self._click_named_action("target_temperature_button") and not self._click_text(
+            [*TARGET_LABELS, "Storage", "Speicher"]
+        ):
+            raise SmartWebError("No SmartWeb target temperature control found")
+        self._wait_for_page()
+
+    def _wait_for_mode_options(self) -> None:
+        supported_modes = [str(mode) for mode in self._controls.get("supported_modes", [])]
+        try:
+            WebDriverWait(self._ensure_driver(), self._timeout).until(
+                lambda _driver: self._looks_like_mode_editor(supported_modes)
+            )
+        except TimeoutException as exc:
+            raise SmartWebError("Timed out waiting for the REMKO operating mode selector") from exc
+
+    def _looks_like_mode_editor(self, supported_modes: list[str]) -> bool:
+        script = """
+            const editor = document.querySelector("#editor");
+            const modes = Array.from(document.querySelectorAll("#modes .mode, div.mode"));
+            const visibleModes = modes.filter((element) => {
+                const rect = element.getBoundingClientRect();
+                const style = window.getComputedStyle(element);
+                return rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.display !== "none" &&
+                    style.visibility !== "hidden";
+            });
+            return Boolean(editor) && visibleModes.length >= 6;
+        """
+        try:
+            if self._ensure_driver().execute_script(script):
+                return True
+        except WebDriverException:
+            return False
+        return count_visible_modes(self._body_text(), supported_modes) >= min(2, len(supported_modes))
+
+    def _click_mode_option(self, mode: str) -> bool:
+        supported_modes = [str(value) for value in self._controls.get("supported_modes", [])]
+        labels = mode_click_labels(mode, supported_modes)
+        script = """
+            const labels = arguments[0].map((value) => (value || "").trim().toLowerCase()).filter(Boolean);
+            const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim().toLowerCase();
+            const isVisible = (element) => {
+                const rect = element.getBoundingClientRect();
+                const style = window.getComputedStyle(element);
+                return rect.width > 0 &&
+                    rect.height > 0 &&
+                    style.visibility !== "hidden" &&
+                    style.display !== "none" &&
+                    !element.disabled &&
+                    element.getAttribute("aria-disabled") !== "true";
+            };
+            const roots = Array.from(document.querySelectorAll("#modes .mode, div.mode, button,a,[role='button']"))
+                .filter(isVisible);
+            const candidates = roots.map((element) => {
+                const text = normalize(element.innerText || element.textContent);
+                const exact = labels.findIndex((label) => text === label);
+                const contains = labels.findIndex((label) => label.length > 3 && text.includes(label));
+                return {element, text, exact, contains};
+            }).filter((candidate) => candidate.exact >= 0 || candidate.contains >= 0)
+                .sort((a, b) => {
+                    const scoreA = a.exact >= 0 ? a.exact : a.contains + 100;
+                    const scoreB = b.exact >= 0 ? b.exact : b.contains + 100;
+                    return scoreA - scoreB || a.text.length - b.text.length;
+                });
+            const candidate = candidates[0];
+            if (!candidate) {
+                return {clicked: false};
+            }
+            candidate.element.scrollIntoView({block: "center", inline: "center"});
+            candidate.element.click();
+            return {clicked: true, text: candidate.text};
+        """
+        result = self._ensure_driver().execute_script(script, labels)
+        LOGGER.debug("Mode option click result for '%s': %s", mode, result)
+        return bool(result and result.get("clicked"))
+
     def _click_text(self, labels: list[str], timeout: int | None = None) -> bool:
         lower_expr = "translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ', 'abcdefghijklmnopqrstuvwxyzäöü')"
         predicates = " or ".join(
@@ -542,10 +825,12 @@ class RemkoSmartWebClient:
         return "add device" in lower_text and "product filter" in lower_text
 
     def _wait_for_device_screen(self, device_name: str) -> None:
+        driver = self._ensure_driver()
+        driver.switch_to.default_content()
         self._wait_for_page()
         try:
-            WebDriverWait(self._ensure_driver(), self._timeout).until(
-                lambda _driver: self._looks_like_device_screen()
+            WebDriverWait(driver, self._timeout).until(
+                lambda _driver: self._focus_device_screen_if_present()
             )
         except TimeoutException as exc:
             body_text = self._body_text()
@@ -562,6 +847,30 @@ class RemkoSmartWebClient:
                 f"Timed out waiting for the REMKO detail screen for '{device_name}'"
             ) from exc
 
+    def _focus_device_screen_if_present(self) -> bool:
+        driver = self._ensure_driver()
+        driver.switch_to.default_content()
+        if self._looks_like_device_screen():
+            return True
+        if self._switch_to_app_frame_if_present():
+            return self._looks_like_device_screen()
+        return False
+
+    def _switch_to_app_frame_if_present(self) -> bool:
+        driver = self._ensure_driver()
+        driver.switch_to.default_content()
+        selectors = [
+            "iframe#appFrame",
+            "iframe[name='appframe']",
+            "iframe[src*='smt.html']",
+        ]
+        for selector in selectors:
+            frames = driver.find_elements(By.CSS_SELECTOR, selector)
+            if frames:
+                driver.switch_to.frame(frames[0])
+                return True
+        return False
+
     def _looks_like_device_screen(self) -> bool:
         body_text = self._body_text()
         lower_text = body_text.lower()
@@ -573,7 +882,20 @@ class RemkoSmartWebClient:
     def _body_text(self) -> str:
         return str(
             self._ensure_driver().execute_script(
-                "return document.body ? document.body.innerText : '';"
+                """
+                if (!document.body) {
+                    return "";
+                }
+                const inner = document.body.innerText || "";
+                const text = document.body.textContent || "";
+                if (!inner) {
+                    return text;
+                }
+                if (!text) {
+                    return inner;
+                }
+                return `${inner}\n${text}`;
+                """
             )
             or ""
         )
@@ -602,6 +924,14 @@ def has_detail_values(state: HeatPumpState) -> bool:
             state.operating_mode,
         )
     )
+
+
+def state_mode_to_power(mode: str | None) -> str | None:
+    if not mode:
+        return None
+    if text_matches_mode(mode, "Off"):
+        return "OFF"
+    return "ON"
 
 
 def xpath_literal(value: str) -> str:

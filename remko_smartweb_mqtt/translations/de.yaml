@@ -9,6 +9,9 @@ configuration:
       overview_url:
         name: Uebersichts-URL
         description: Optional direkte URL der Geraeteuebersicht.
+      device_url:
+        name: Geraete-URL
+        description: Optional direkte Fernbedienungs-URL hinter dem Haus-Symbol.
       username:
         name: Benutzername
         description: REMKO SmartWeb Benutzername.
@@ -24,6 +27,24 @@ configuration:
       request_timeout_seconds:
         name: Timeout
         description: Sekunden fuer Browseraktionen und Seitenladevorgaenge.
+      live_value_timeout_seconds:
+        name: Livewert-Wartezeit
+        description: Sekunden, die bei 0,0-Grad-Platzhalterwerten auf echte Pumpendaten gewartet wird.
+      live_value_check_interval_seconds:
+        name: Livewert-Pruefintervall
+        description: Sekunden zwischen Pruefungen, solange SmartWeb Platzhalterwerte zeigt.
+      ignore_zero_temperatures:
+        name: 0,0-Grad-Werte ignorieren
+        description: 0,0 Grad oben und unten als noch nicht aktualisierte SmartWeb-Platzhalter behandeln.
+      mode_set_attempts:
+        name: Modus-Schreibversuche
+        description: Wie oft ein Betriebsmodus gesetzt und danach verifiziert wird.
+      mode_set_retry_seconds:
+        name: Modus-Schreibpause
+        description: Sekunden Wartezeit zwischen Modus-Schreibversuch und erneuter Pruefung.
+      power_on_mode:
+        name: Einschaltmodus
+        description: Betriebsmodus, den der MQTT-Power-Schalter bei ON setzt.
       homeassistant_log:
         name: Home-Assistant-Log
         description: Nichtverfuegbarkeit und Fehler auch in das Home-Assistant-Systemlog schreiben.
@@ -45,3 +66,16 @@ configuration:
   selectors:
     name: Selektoren
     description: Optionale CSS- oder XPath-Selektoren fuer REMKO SmartWeb.
+    fields:
+      operating_mode_button:
+        name: Betriebsart-Kachel
+        description: Optionaler Selektor fuer die Kachel, die die Betriebsart-Auswahl oeffnet.
+      active_mode:
+        name: Aktive Betriebsart
+        description: Optionaler Selektor fuer den gruen markierten aktuellen Betriebsmodus.
+      target_temperature_button:
+        name: Speicher-Temperatur-Kachel
+        description: Optionaler Selektor fuer die Kachel zur gewuenschten Speicher-Ladetemperatur.
+      timer_button:
+        name: Timer-Kachel
+        description: Optionaler Selektor fuer die Timer-Kachel. Aktuell nur zur Dokumentation der REMKO-Ansicht.

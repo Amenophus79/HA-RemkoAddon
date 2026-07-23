@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .modes import canonicalize_mode
+
 
 class ConfigError(RuntimeError):
     """Raised when the add-on configuration is incomplete or invalid."""
@@ -15,12 +17,19 @@ DEFAULT_OPTIONS: dict[str, Any] = {
     "remko": {
         "base_url": "https://smartweb.remko.media/",
         "overview_url": "",
+        "device_url": "",
         "credentials_file": "/data/credentials.json",
         "username": "",
         "password": "",
         "device_name": "",
         "poll_interval_minutes": 15,
         "request_timeout_seconds": 90,
+        "live_value_timeout_seconds": 300,
+        "live_value_check_interval_seconds": 10,
+        "ignore_zero_temperatures": True,
+        "mode_set_attempts": 3,
+        "mode_set_retry_seconds": 20,
+        "power_on_mode": "Automatic",
         "homeassistant_log": True,
         "homeassistant_log_logger": "remko_smartweb_mqtt",
         "homeassistant_notification": True,
@@ -36,7 +45,7 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "retain_state": False,
     },
     "controls": {
-        "supported_modes": ["Auto", "Heizen", "Kühlen", "Standby", "Aus"],
+        "supported_modes": ["Off", "Automatic", "Eco", "Hybrid", "Fastheating", "Vacation"],
         "min_temperature": 10.0,
         "max_temperature": 60.0,
         "temperature_step": 0.5,
@@ -55,6 +64,10 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "power_on_button": "",
         "power_off_button": "",
         "mode_control": "",
+        "operating_mode_button": "",
+        "active_mode": "",
+        "target_temperature_button": "",
+        "timer_button": "",
         "target_temperature_input": "",
         "save_button": "",
     },
@@ -138,7 +151,14 @@ def validate_options(options: dict[str, Any]) -> None:
     interval = int(remko["poll_interval_minutes"])
     if interval < 1:
         raise ConfigError("poll_interval_minutes must be at least 1")
-
+    if int(remko["live_value_timeout_seconds"]) < 0:
+        raise ConfigError("live_value_timeout_seconds must not be negative")
+    if int(remko["live_value_check_interval_seconds"]) < 1:
+        raise ConfigError("live_value_check_interval_seconds must be at least 1")
+    if int(remko["mode_set_attempts"]) < 1:
+        raise ConfigError("mode_set_attempts must be at least 1")
+    if int(remko["mode_set_retry_seconds"]) < 0:
+        raise ConfigError("mode_set_retry_seconds must not be negative")
     controls = options["controls"]
     if float(controls["min_temperature"]) >= float(controls["max_temperature"]):
         raise ConfigError("min_temperature must be lower than max_temperature")
@@ -147,3 +167,7 @@ def validate_options(options: dict[str, Any]) -> None:
     if not modes:
         raise ConfigError("supported_modes must contain at least one mode")
     controls["supported_modes"] = modes
+    power_on_mode = canonicalize_mode(str(remko["power_on_mode"]), modes)
+    if not power_on_mode:
+        raise ConfigError("power_on_mode must be one of supported_modes")
+    remko["power_on_mode"] = power_on_mode
