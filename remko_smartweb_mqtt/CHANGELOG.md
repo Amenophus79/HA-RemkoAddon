@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9
+
+- Restores empty `mqtt`, `controls`, and `selectors` root option groups so Home Assistant option validation accepts the configuration.
+- Keeps their individual fields optional and internally defaulted by the app.
+
 ## 0.2.8
 
 - Simplifies the Home Assistant configuration UI to the fields that normally need user input: device URL, credentials file, username, and password.

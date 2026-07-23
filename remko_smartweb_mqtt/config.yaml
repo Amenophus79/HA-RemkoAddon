@@ -1,5 +1,5 @@
 name: REMKO SmartWeb MQTT
-version: "0.2.8"
+version: "0.2.9"
 slug: remko_smartweb_mqtt
 description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
 arch:
@@ -21,6 +21,9 @@ options:
     credentials_file: /config/credentials.json
     username: ""
     password: ""
+  mqtt: {}
+  controls: {}
+  selectors: {}
 schema:
   remko:
     base_url: str?
