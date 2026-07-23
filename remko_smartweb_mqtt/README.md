@@ -82,18 +82,16 @@ Useful examples:
 
 ```yaml
 selectors:
-  device_link: "xpath://a[contains(., 'Meine Waermepumpe')]"
-  temperature_top: ".temperature-top"
-  temperature_bottom: ".temperature-bottom"
-  operating_mode: ".operation-mode"
-  status: ".heatpump-status"
-  power_on_button: "xpath://button[contains(., 'Ein')]"
-  power_off_button: "xpath://button[contains(., 'Aus')]"
-  mode_control: "select[name='mode']"
+  username_input: "input#benutzer"
+  password_input: "input#password"
+  login_button: "button#login_do"
+  temperature_top: "#RoomValue"
+  temperature_bottom: "#IndoorValue"
+  target_temperature: "#ID1333_000_000_value"
+  operating_mode: "#ID1192_000_000_value"
   operating_mode_button: "#ID1192_000_button"
   target_temperature_button: "#ID1333_000_button"
-  target_temperature_input: "input[name='targetTemperature']"
-  save_button: "button[type='submit']"
+  timer_button: "#ID1404_000_button"
 ```
 
 ## MQTT broker

@@ -114,20 +114,25 @@ Use `--loop --max-polls N` to repeat the probe with the configured `remko.poll_i
 
 ## Selectors
 
-Because REMKO SmartWeb can differ between devices and software versions, selectors are configurable. Empty selectors use automatic detection. If a value is missing in Home Assistant, inspect the REMKO page in a desktop browser and set a selector for that element.
+Because REMKO SmartWeb can differ between devices and software versions, selectors are configurable. The observed REMKO values are prefilled in the add-on options. Empty optional selectors use automatic detection. If a value is missing in Home Assistant, inspect the REMKO page in a desktop browser and set a selector for that element.
 
 Selectors use CSS unless they start with `xpath:`. Example:
 
 ```yaml
 selectors:
-  username_input: "input[type='email']"
-  password_input: "input[type='password']"
-  login_button: "xpath://button[contains(normalize-space(.), 'Login')]"
-  device_link: "xpath://*[contains(normalize-space(.), 'WIFI Stick - Warmwasserwärmepumpe')]/following::*[self::a or self::button or @role='button'][1]"
-  temperature_top: "xpath://*[contains(., 'Speicher oben')]/following::*[1]"
+  username_input: "input#benutzer"
+  password_input: "input#password"
+  login_button: "button#login_do"
+  temperature_top: "#RoomValue"
+  temperature_bottom: "#IndoorValue"
+  target_temperature: "#ID1333_000_000_value"
+  operating_mode: "#ID1192_000_000_value"
+  operating_mode_button: "#ID1192_000_button"
+  target_temperature_button: "#ID1333_000_button"
+  timer_button: "#ID1404_000_button"
 ```
 
-The first REMKO login page seen on July 1, 2026 has visible labels `Email*`, `Password*`, and a `Login` button. The add-on's automatic login detection should match this page through `input[type='email']`, `input[type='password']`, and the submit/login button fallback. Configure the selectors above only if the automatic login fails.
+The first REMKO login page seen on July 1, 2026 has visible labels `Email*`, `Password*`, and a `Login` button. The observed DOM uses `input#benutzer`, `input#password`, and `button#login_do`; these are configured as defaults.
 
 The device overview seen on July 1, 2026 shows the pump row as `WIFI Stick - Warmwasserwärmepumpe`. The first action icon in that row is the small house icon. Leave `selectors.device_link` empty first: the add-on will try to find that row from `remko.device_name` and click the first action icon automatically. If the icon is greyed out, SmartWeb appears to consider the device unavailable; the add-on will time out with a clear error and retry on the next poll.
 
@@ -151,7 +156,7 @@ Mode writes are verified. The add-on clicks the requested mode, waits `remko.mod
 
 The desired storage temperature is read automatically from `#ID1333_000_000_value`. For temperature commands, the add-on opens `#ID1333_000_button` before looking for the input control.
 
-Leave `selectors.operating_mode_button`, `selectors.target_temperature_button`, and `selectors.active_mode` empty first; set them only if REMKO changes the ids or the automatic detection is not enough.
+The operating mode, target temperature, and timer button selectors are configured with the observed stable ids by default. Change them only if REMKO changes the ids or the automatic detection is not enough.
 
 For the remaining workflow, send screenshots of:
 
