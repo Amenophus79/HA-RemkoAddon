@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -53,6 +55,7 @@ class MqttBridge:
         self.availability_topic = f"{self.base_topic}/availability"
         self.error_topic = f"{self.base_topic}/error"
         self.feedback_topic = f"{self.base_topic}/feedback"
+        self.last_state: HeatPumpState | None = None
 
         client_id = f"remko-smartweb-{self.device_slug}-{socket.gethostname()}"
         self.client = mqtt.Client(
@@ -109,8 +112,26 @@ class MqttBridge:
         self.client.publish(self.availability_topic, state, retain=True)
 
     def publish_state(self, state: HeatPumpState) -> None:
+        self.last_state = state
         payload = json.dumps(state.as_payload(), ensure_ascii=False, separators=(",", ":"))
         self.client.publish(self.state_topic, payload, retain=self.retain_state)
+
+    def publish_optimistic_state(self, **values: Any) -> bool:
+        if self.last_state is None:
+            LOGGER.info("Skipping optimistic MQTT state publish because no baseline state exists yet")
+            return False
+
+        patch = {key: value for key, value in values.items() if value is not None}
+        if not patch:
+            return False
+
+        state = replace(
+            self.last_state,
+            **patch,
+            scraped_at=datetime.now(timezone.utc),
+        )
+        self.publish_state(state)
+        return True
 
     def publish_feedback(
         self,

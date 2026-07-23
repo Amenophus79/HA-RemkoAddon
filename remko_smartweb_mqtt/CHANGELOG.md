@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- Publishes an optimistic full MQTT state after successful control commands so Home Assistant controls do not jump back to a stale SmartWeb value.
+- Delays the next SmartWeb poll briefly after commands to avoid immediately reading old values while REMKO is still applying a change.
+- Treats delayed REMKO mode confirmation as a warning after the command was sent instead of a hard command failure.
+
 ## 0.3.2
 
 - Removes the ambiguous Home Assistant `Zustand` sensor from MQTT discovery because the observed REMKO page does not expose a separate operating-status value.

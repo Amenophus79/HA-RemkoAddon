@@ -16,6 +16,7 @@ from .smartweb import RemkoSmartWebClient, SmartWebError
 
 LOGGER = logging.getLogger(__name__)
 MQTT_CONNECT_RETRY_SECONDS = 30
+COMMAND_SETTLE_SECONDS = 30
 
 
 def main() -> None:
@@ -59,7 +60,11 @@ def main() -> None:
             )
 
             now = time.monotonic()
-            if command_processed or now >= next_poll:
+            if command_processed:
+                next_poll = now + command_settle_seconds(options)
+                continue
+
+            if now >= next_poll:
                 try:
                     state = smartweb.poll()
                     mqtt_bridge.publish_state(state)
@@ -126,7 +131,9 @@ def process_pending_commands(
             return processed
 
         try:
-            apply_command(command, smartweb, options)
+            optimistic_patch = apply_command(command, smartweb, options)
+            if optimistic_patch:
+                mqtt_bridge.publish_optimistic_state(**optimistic_patch)
             processed = True
         except Exception as exc:
             LOGGER.exception("Failed to apply command %s", command)
@@ -138,22 +145,25 @@ def apply_command(
     command: Command,
     smartweb: RemkoSmartWebClient,
     options: dict[str, Any],
-) -> None:
+) -> dict[str, Any]:
     if command.kind == "power":
-        smartweb.set_power(bool(command.value))
-        return
+        enabled = bool(command.value)
+        smartweb.set_power(enabled)
+        target_mode = str(options["remko"]["power_on_mode"]) if enabled else "Off"
+        return {"operating_mode": target_mode, "power": mode_to_power(target_mode)}
 
     if command.kind == "mode":
-        smartweb.set_mode(validate_mode(str(command.value), options))
-        return
+        mode = validate_mode(str(command.value), options)
+        smartweb.set_mode(mode)
+        return {"operating_mode": mode, "power": mode_to_power(mode)}
 
     if command.kind == "temperature":
-        smartweb.set_temperature(validate_temperature(float(command.value), options))
-        return
+        temperature = validate_temperature(float(command.value), options)
+        smartweb.set_temperature(temperature)
+        return {"target_temperature": temperature}
 
     if command.kind == "batch":
-        apply_batch(command.value, smartweb, options)
-        return
+        return apply_batch(command.value, smartweb, options)
 
     raise ValueError(f"Unsupported command kind: {command.kind}")
 
@@ -162,7 +172,8 @@ def apply_batch(
     data: dict[str, Any],
     smartweb: RemkoSmartWebClient,
     options: dict[str, Any],
-) -> None:
+) -> dict[str, Any]:
+    patch: dict[str, Any] = {}
     if "power" in data:
         power = data["power"]
         if isinstance(power, str):
@@ -170,13 +181,21 @@ def apply_batch(
         else:
             power_enabled = bool(power)
         smartweb.set_power(power_enabled)
+        target_mode = str(options["remko"]["power_on_mode"]) if power_enabled else "Off"
+        patch.update({"operating_mode": target_mode, "power": mode_to_power(target_mode)})
 
     if "mode" in data:
-        smartweb.set_mode(validate_mode(str(data["mode"]), options))
+        mode = validate_mode(str(data["mode"]), options)
+        smartweb.set_mode(mode)
+        patch.update({"operating_mode": mode, "power": mode_to_power(mode)})
 
     temperature = data.get("temperature", data.get("target_temperature"))
     if temperature is not None:
-        smartweb.set_temperature(validate_temperature(float(temperature), options))
+        target_temperature = validate_temperature(float(temperature), options)
+        smartweb.set_temperature(target_temperature)
+        patch["target_temperature"] = target_temperature
+
+    return patch
 
 
 def validate_temperature(value: float, options: dict[str, Any]) -> float:
@@ -194,6 +213,17 @@ def validate_mode(value: str, options: dict[str, Any]) -> str:
     if mode:
         return mode
     raise ValueError(f"Mode '{value}' is not one of: {', '.join(supported)}")
+
+
+def mode_to_power(mode: str | None) -> str | None:
+    if mode is None:
+        return None
+    return "OFF" if mode.strip().lower() == "off" else "ON"
+
+
+def command_settle_seconds(options: dict[str, Any]) -> int:
+    retry_seconds = int(options["remko"].get("mode_set_retry_seconds") or 0)
+    return max(COMMAND_SETTLE_SECONDS, retry_seconds)
 
 
 class StopFlag:

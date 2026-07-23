@@ -14,7 +14,6 @@ The add-on publishes retained MQTT discovery configs for:
 - SmartWeb status sensor
 - Top temperature sensor
 - Bottom temperature sensor
-- Status sensor
 - Operating mode sensor
 - Power switch
 - Operating mode select
@@ -51,7 +50,9 @@ remko/<device_slug>/temperature/set
 remko/<device_slug>/command/set
 ```
 
-By default, the MQTT power switch uses the operating mode screen: `OFF` selects mode `Off`, while `ON` selects `remko.power_on_mode` (`Automatic` by default).
+By default, the MQTT power switch uses the operating mode screen: `OFF` selects mode `Off`, while `ON` selects `remko.power_on_mode` (`Automatic` by default). The operating mode select is the canonical control for the observed REMKO screen.
+
+After a control command, the add-on publishes an optimistic full state from the last known values plus the requested change. The next SmartWeb poll is delayed briefly so Home Assistant does not immediately jump back to a stale value while REMKO is still applying the command.
 
 The JSON command topic accepts payloads like:
 

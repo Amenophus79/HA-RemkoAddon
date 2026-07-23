@@ -189,7 +189,7 @@ class RemkoSmartWebClient:
             return False
         return state.temperature_top == 0 and state.temperature_bottom == 0
 
-    def set_power(self, enabled: bool) -> None:
+    def set_power(self, enabled: bool) -> bool:
         self._open_device_page()
         selector_name = "power_on_button" if enabled else "power_off_button"
         selector = self._selectors.get(selector_name)
@@ -197,11 +197,11 @@ class RemkoSmartWebClient:
             self._click_selector(selector)
         else:
             target_mode = str(self._remko["power_on_mode"]) if enabled else "Off"
-            self.set_mode(target_mode)
-            return
+            return self.set_mode(target_mode)
         self._save_if_configured()
+        return True
 
-    def set_mode(self, mode: str) -> None:
+    def set_mode(self, mode: str) -> bool:
         supported_modes = [str(item) for item in self._controls.get("supported_modes", [])]
         desired_mode = canonicalize_mode(mode, supported_modes) or mode
         last_seen: str | None = None
@@ -212,7 +212,7 @@ class RemkoSmartWebClient:
             last_seen = current_mode
             if text_matches_mode(current_mode, desired_mode):
                 LOGGER.info("REMKO operating mode is already %s", current_mode)
-                return
+                return True
 
             LOGGER.info(
                 "Setting REMKO operating mode to %s, attempt %s/%s",
@@ -229,7 +229,7 @@ class RemkoSmartWebClient:
             last_seen = confirmed_mode
             if text_matches_mode(confirmed_mode, desired_mode):
                 LOGGER.info("REMKO confirmed operating mode %s", confirmed_mode)
-                return
+                return True
 
             LOGGER.warning(
                 "REMKO did not confirm operating mode %s after attempt %s; last seen: %s",
@@ -238,11 +238,14 @@ class RemkoSmartWebClient:
                 confirmed_mode or "unknown",
             )
 
-        raise SmartWebError(
-            "REMKO did not confirm operating mode "
-            f"'{desired_mode}' after {self._mode_set_attempts} attempts"
-            + (f"; last seen: {last_seen}" if last_seen else "")
+        LOGGER.warning(
+            "REMKO accepted operating mode command for %s but did not confirm it "
+            "after %s attempts; last seen: %s",
+            desired_mode,
+            self._mode_set_attempts,
+            last_seen or "unknown",
         )
+        return False
 
     def _apply_mode_once(self, mode: str) -> None:
         selector = self._selectors.get("mode_control")

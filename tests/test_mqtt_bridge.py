@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import queue
 import socket
 import sys
@@ -14,6 +15,7 @@ from remko_smartweb_mqtt.mqtt_bridge import (
     mqtt_host_candidates,
     slugify,
 )
+from remko_smartweb_mqtt.models import HeatPumpState
 
 
 class MqttBridgeTests(unittest.TestCase):
@@ -76,6 +78,30 @@ class MqttBridgeTests(unittest.TestCase):
         self.assertFalse(any(topic == removed_topic for topic, _payload in retained_configs))
         self.assertFalse(any('"name":"Zustand"' in payload for _topic, payload in retained_configs))
         self.assertTrue(any("_mode_state/config" in topic for topic, _payload in retained_configs))
+
+    def test_optimistic_state_preserves_last_values_and_updates_mode(self) -> None:
+        bridge = MqttBridge(self._options("mqtt.local"), queue.Queue())
+        client = PublishClient()
+        bridge.client = client
+        bridge.publish_state(
+            HeatPumpState(
+                temperature_top=52.0,
+                temperature_bottom=51.5,
+                target_temperature=50.0,
+                operating_mode="Automatic",
+                power="ON",
+            )
+        )
+
+        published = bridge.publish_optimistic_state(operating_mode="Off", power="OFF")
+
+        self.assertTrue(published)
+        payload = json.loads(client.published[-1][1])
+        self.assertEqual(payload["temperature_top"], 52.0)
+        self.assertEqual(payload["temperature_bottom"], 51.5)
+        self.assertEqual(payload["target_temperature"], 50.0)
+        self.assertEqual(payload["mode"], "Off")
+        self.assertEqual(payload["power"], "OFF")
 
     def _options(self, host: str) -> dict:
         return {

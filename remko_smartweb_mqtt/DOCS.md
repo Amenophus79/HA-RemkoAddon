@@ -77,6 +77,8 @@ remko/<device_slug>/temperature/set  Numeric temperature
 
 Without dedicated SmartWeb power buttons, `power/set OFF` sets operating mode `Off`; `power/set ON` sets `remko.power_on_mode`, which defaults to `Automatic`.
 
+The Home Assistant `Betrieb` switch is therefore only a convenience alias for the operating mode. The canonical control for this REMKO screen is the `Betriebsmodus` select entity.
+
 For combined commands:
 
 ```text
