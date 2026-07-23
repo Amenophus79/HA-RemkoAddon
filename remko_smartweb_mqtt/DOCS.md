@@ -54,7 +54,6 @@ At startup the add-on connects to MQTT and publishes Home Assistant MQTT discove
 - temperature at the bottom
 - target temperature, if visible
 - operating mode
-- operating status
 
 Polling repeats every `remko.poll_interval_minutes` minutes. The default is `15`.
 
@@ -122,16 +121,16 @@ Selectors use CSS unless they start with `xpath:`. Example:
 
 ```yaml
 selectors:
-  username_input: "input#benutzer"
-  password_input: "input#password"
-  login_button: "button#login_do"
-  temperature_top: "#RoomValue"
-  temperature_bottom: "#IndoorValue"
-  target_temperature: "#ID1333_000_000_value"
-  operating_mode: "#ID1192_000_000_value"
-  operating_mode_button: "#ID1192_000_button"
-  target_temperature_button: "#ID1333_000_button"
-  timer_button: "#ID1404_000_button"
+  username_input: "[id='benutzer']"
+  password_input: "[id='password']"
+  login_button: "[id='login_do']"
+  temperature_top: "[id='RoomValue']"
+  temperature_bottom: "[id='IndoorValue']"
+  target_temperature: "[id='ID1333_000_000_value']"
+  operating_mode: "[id='ID1192_000_000_value']"
+  operating_mode_button: "[id='ID1192_000_button']"
+  target_temperature_button: "[id='ID1333_000_button']"
+  timer_button: "[id='ID1404_000_button']"
 ```
 
 The first REMKO login page seen on July 1, 2026 has visible labels `Email*`, `Password*`, and a `Login` button. The observed DOM uses `input#benutzer`, `input#password`, and `button#login_do`; these are configured as defaults.

@@ -57,6 +57,26 @@ class MqttBridgeTests(unittest.TestCase):
         self.assertIn("addon_core_mosquitto:1883", str(ctx.exception))
         self.assertFalse(client.loop_started)
 
+    def test_discovery_removes_ambiguous_status_sensor(self) -> None:
+        bridge = MqttBridge(self._options("mqtt.local"), queue.Queue())
+        client = PublishClient()
+        bridge.client = client
+
+        bridge.publish_discovery()
+
+        removed_topic = (
+            "homeassistant/sensor/remko_wifi_stick_warmwasserw_rmepumpe_status/config"
+        )
+        self.assertIn((removed_topic, "", True), client.published)
+        retained_configs = [
+            (topic, payload)
+            for topic, payload, retain in client.published
+            if topic.endswith("/config") and payload and retain
+        ]
+        self.assertFalse(any(topic == removed_topic for topic, _payload in retained_configs))
+        self.assertFalse(any('"name":"Zustand"' in payload for _topic, payload in retained_configs))
+        self.assertTrue(any("_mode_state/config" in topic for topic, _payload in retained_configs))
+
     def _options(self, host: str) -> dict:
         return {
             "remko": {"device_name": "WIFI Stick - Warmwasserwärmepumpe"},
@@ -92,6 +112,14 @@ class RetryClient:
 
     def loop_start(self) -> None:
         self.loop_started = True
+
+
+class PublishClient:
+    def __init__(self) -> None:
+        self.published: list[tuple[str, str, bool]] = []
+
+    def publish(self, topic: str, payload: str, retain: bool = False) -> None:
+        self.published.append((topic, payload, retain))
 
 
 if __name__ == "__main__":

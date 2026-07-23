@@ -138,6 +138,9 @@ class MqttBridge:
         )
 
     def publish_discovery(self) -> None:
+        for topic in self._removed_discovery_topics():
+            self.client.publish(topic, "", retain=True)
+
         for component, object_id, payload in self._discovery_payloads():
             topic = f"{self.discovery_prefix}/{component}/{object_id}/config"
             self.client.publish(
@@ -308,17 +311,6 @@ class MqttBridge:
             ),
             (
                 "sensor",
-                f"{object_prefix}_status",
-                {
-                    **common,
-                    "name": "Zustand",
-                    "unique_id": f"{object_prefix}_status",
-                    "icon": "mdi:heat-pump",
-                    "value_template": "{{ value_json.status }}",
-                },
-            ),
-            (
-                "sensor",
                 f"{object_prefix}_mode_state",
                 {
                     **common,
@@ -374,6 +366,12 @@ class MqttBridge:
                     "mode": "box",
                 },
             ),
+        ]
+
+    def _removed_discovery_topics(self) -> list[str]:
+        object_prefix = f"remko_{self.device_slug}"
+        return [
+            f"{self.discovery_prefix}/sensor/{object_prefix}_status/config",
         ]
 
     def _resolve_mqtt_options(self, configured: dict[str, Any]) -> dict[str, Any]:

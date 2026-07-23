@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Removes the ambiguous Home Assistant `Zustand` sensor from MQTT discovery because the observed REMKO page does not expose a separate operating-status value.
+- Clears the old retained MQTT discovery config for the removed `Zustand` sensor on startup.
+
 ## 0.3.1
 
 - Retries MQTT startup instead of exiting when the broker name is temporarily unavailable.
