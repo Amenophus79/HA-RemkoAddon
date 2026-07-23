@@ -87,6 +87,18 @@ docker compose logs -f remko-addon
 docker compose logs -f mqtt
 ```
 
+## Troubleshooting
+
+This compose setup does not start a web dashboard. Use MQTT Explorer to inspect the broker on `localhost:1883`. A page such as `localhost:5174` belongs to another local development app unless you start one yourself.
+
+If MQTT Explorer only shows `availability` and `feedback` with `status: starting`, the add-on is connected to MQTT but the first SmartWeb poll has not published a state yet. Watch the add-on logs:
+
+```sh
+docker compose logs -f remko-addon
+```
+
+The first poll can take several minutes when SmartWeb login, device connection, or live value refresh is slow.
+
 ## Stop And Clean Up
 
 ```sh

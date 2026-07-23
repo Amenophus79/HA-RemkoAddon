@@ -111,6 +111,7 @@ class RemkoSmartWebClient:
             self._driver = None
 
     def poll(self) -> HeatPumpState:
+        LOGGER.info("Starting REMKO SmartWeb poll")
         self._open_device_page()
         state = self._read_state()
         if not has_detail_values(state):
@@ -306,18 +307,21 @@ class RemkoSmartWebClient:
         overview_url = str(self._remko.get("overview_url") or "").strip()
         device_url = str(self._remko.get("device_url") or "").strip()
         base_url = str(self._remko["base_url"]).strip()
+        LOGGER.info("Opening REMKO SmartWeb entry page: %s", overview_url or base_url)
         driver.get(overview_url or base_url)
         self._wait_for_page()
         self._login_if_needed()
 
         if device_url:
             driver.switch_to.default_content()
+            LOGGER.info("Opening configured REMKO device URL: %s", device_url)
             driver.get(device_url)
             self._wait_for_device_screen(str(self._remko["device_name"]).strip())
             return
 
         if overview_url:
             driver.switch_to.default_content()
+            LOGGER.info("Opening REMKO overview URL: %s", overview_url)
             driver.get(overview_url)
             self._wait_for_page()
 
@@ -370,6 +374,7 @@ class RemkoSmartWebClient:
         if password_el is None:
             return
 
+        LOGGER.info("REMKO SmartWeb login form detected; submitting credentials")
         username_el = self._find_first(
             configured=self._selectors.get("username_input"),
             defaults=DEFAULT_USERNAME_SELECTORS,
@@ -832,6 +837,7 @@ class RemkoSmartWebClient:
             WebDriverWait(driver, self._timeout).until(
                 lambda _driver: self._focus_device_screen_if_present()
             )
+            LOGGER.info("REMKO detail screen is ready")
         except TimeoutException as exc:
             body_text = self._body_text()
             if (
@@ -868,6 +874,7 @@ class RemkoSmartWebClient:
             frames = driver.find_elements(By.CSS_SELECTOR, selector)
             if frames:
                 driver.switch_to.frame(frames[0])
+                LOGGER.info("Switched into REMKO SmartWeb app frame via %s", selector)
                 return True
         return False
 

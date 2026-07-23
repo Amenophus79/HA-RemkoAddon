@@ -392,6 +392,6 @@ def strip_topic(value: str, default: str) -> str:
 
 def slugify(value: str) -> str:
     lowered = value.lower().strip()
-    slug = re.sub(r"[^a-z0-9_-]+", "_", lowered)
+    slug = re.sub(r"[^a-z0-9]+", "_", lowered)
     slug = re.sub(r"_+", "_", slug).strip("_")
     return slug or "heatpump"
