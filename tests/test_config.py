@@ -8,10 +8,44 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remko_smartweb_mqtt"))
 
-from remko_smartweb_mqtt.config import ConfigError, load_options
+from remko_smartweb_mqtt.config import ConfigError, ensure_credentials_template, load_options
 
 
 class ConfigTests(unittest.TestCase):
+    def test_ensure_credentials_template_uses_configured_credentials_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            credentials_path = root / "nested" / "credentials.json"
+            options_path = root / "options.json"
+            options_path.write_text(
+                json.dumps({"remko": {"credentials_file": str(credentials_path)}}),
+                encoding="utf-8",
+            )
+
+            template_path = ensure_credentials_template(options_path)
+
+            self.assertEqual(template_path, root / "nested" / "credentials.example.json")
+            data = json.loads(template_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["remko"]["device_name"], "WIFI Stick - Warmwasserwärmepumpe")
+            self.assertEqual(data["mqtt"]["host"], "auto")
+
+    def test_ensure_credentials_template_does_not_overwrite_existing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            credentials_path = root / "credentials.json"
+            template_path = root / "credentials.example.json"
+            options_path = root / "options.json"
+            options_path.write_text(
+                json.dumps({"remko": {"credentials_file": str(credentials_path)}}),
+                encoding="utf-8",
+            )
+            template_path.write_text("keep me\n", encoding="utf-8")
+
+            returned_path = ensure_credentials_template(options_path)
+
+            self.assertEqual(returned_path, template_path)
+            self.assertEqual(template_path.read_text(encoding="utf-8"), "keep me\n")
+
     def test_credentials_file_overrides_addon_options(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

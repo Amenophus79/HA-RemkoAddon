@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Creates `/config/credentials.example.json` on app start if it does not exist yet.
+- Creates the app config directory before option validation so the template is available even when credentials still need to be filled in.
+- Never overwrites an existing credentials template or real credentials file.
+
 ## 0.2.9
 
 - Restores empty `mqtt`, `controls`, and `selectors` root option groups so Home Assistant option validation accepts the configuration.

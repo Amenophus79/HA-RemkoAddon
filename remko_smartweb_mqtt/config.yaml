@@ -1,5 +1,5 @@
 name: REMKO SmartWeb MQTT
-version: "0.2.9"
+version: "0.3.0"
 slug: remko_smartweb_mqtt
 description: Poll REMKO SmartWeb and expose heat pump data and commands through MQTT.
 arch:

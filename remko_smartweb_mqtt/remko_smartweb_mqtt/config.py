@@ -13,6 +13,21 @@ class ConfigError(RuntimeError):
     """Raised when the add-on configuration is incomplete or invalid."""
 
 
+CREDENTIALS_TEMPLATE: dict[str, Any] = {
+    "remko": {
+        "username": "your-remko-login@example.com",
+        "password": "your-remko-password",
+        "device_name": "WIFI Stick - Warmwasserwärmepumpe",
+    },
+    "mqtt": {
+        "host": "auto",
+        "port": 1883,
+        "username": "",
+        "password": "",
+    },
+}
+
+
 DEFAULT_OPTIONS: dict[str, Any] = {
     "remko": {
         "base_url": "https://smartweb.remko.media/",
@@ -72,6 +87,28 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "save_button": "",
     },
 }
+
+
+def ensure_credentials_template(path: str | os.PathLike[str] = "/data/options.json") -> Path:
+    configured = load_json_file(path)
+    remko_options = configured.get("remko") if isinstance(configured.get("remko"), dict) else {}
+    credentials_file = str(
+        remko_options.get("credentials_file")
+        or DEFAULT_OPTIONS["remko"]["credentials_file"]
+    ).strip()
+    credentials_path = Path(credentials_file or DEFAULT_OPTIONS["remko"]["credentials_file"])
+    template_path = credentials_path.parent / "credentials.example.json"
+
+    try:
+        template_path.parent.mkdir(parents=True, exist_ok=True)
+        if not template_path.exists():
+            template_path.write_text(
+                json.dumps(CREDENTIALS_TEMPLATE, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+    except OSError as exc:
+        raise ConfigError(f"Could not create credentials template at {template_path}: {exc}") from exc
+    return template_path
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

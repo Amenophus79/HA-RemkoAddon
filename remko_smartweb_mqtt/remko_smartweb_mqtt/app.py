@@ -6,7 +6,7 @@ import signal
 import time
 from typing import Any
 
-from .config import ConfigError, load_options
+from .config import ConfigError, ensure_credentials_template, load_options
 from .feedback import AVAILABLE, ERROR, UNAVAILABLE
 from .homeassistant_log import HomeAssistantLogNotifier
 from .models import Command
@@ -25,6 +25,12 @@ def main() -> None:
     stop = StopFlag()
     signal.signal(signal.SIGTERM, stop.handle)
     signal.signal(signal.SIGINT, stop.handle)
+
+    try:
+        template_path = ensure_credentials_template()
+        LOGGER.info("Credentials template is available at %s", template_path)
+    except ConfigError:
+        LOGGER.warning("Could not create credentials template", exc_info=True)
 
     try:
         options = load_options()
