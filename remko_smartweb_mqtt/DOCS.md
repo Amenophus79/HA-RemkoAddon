@@ -57,6 +57,8 @@ At startup the add-on connects to MQTT and publishes Home Assistant MQTT discove
 
 Polling repeats every `remko.poll_interval_minutes` minutes. The default is `15`.
 
+After opening the device page, the add-on waits `remko.value_read_delay_seconds` seconds before reading values. The default is `10` seconds so the SmartWeb browser UI can refresh its DOM values before they are scraped.
+
 If the REMKO overview action icon is greyed out or the pump screen cannot be opened, the add-on publishes a feedback payload to `remko/<device_slug>/feedback` with `status: unavailable`, `available: false`, and a message explaining the timeout. Home Assistant also gets a SmartWeb availability binary sensor and SmartWeb status sensor through MQTT discovery.
 
 If `remko.homeassistant_log` is enabled, unavailable/error states are additionally written to the Home Assistant system log with the configured `remko.homeassistant_log_logger` logger name. The add-on calls Home Assistant Core through the Supervisor proxy and `system_log.write`; repeated identical messages are suppressed until a successful poll resets the notifier.
@@ -157,7 +159,7 @@ The current operating mode is read automatically from `#ID1192_000_000_value`. F
 
 In the observed mode editor these options have stable ids: `1192_2` = Off, `1192_3` = Automatic, `1192_9` = Eco, `1192_10` = Hybrid, `1192_11` = Fastheating, and `1192_12` = Vacation. The scraper targets `#modes .mode` first and reads `.mode.selected` when the editor is open.
 
-Mode writes are verified. The add-on clicks the requested mode, waits `remko.mode_set_retry_seconds` seconds, opens the pump view again, and checks whether `#ID1192_000_000_value` confirms the requested mode. If SmartWeb did not accept it yet, the add-on repeats this up to `remko.mode_set_attempts` times. The defaults are three attempts with a 20 second pause.
+Mode writes are verified. The add-on clicks the requested mode, opens the pump view again, waits `remko.value_read_delay_seconds` seconds, and checks whether `#ID1192_000_000_value` confirms the requested mode. If SmartWeb did not accept it yet, the add-on waits `remko.mode_set_retry_seconds` seconds before the next attempt. The defaults are three attempts, 10 seconds before reading, and 20 seconds before retrying.
 
 The desired storage temperature is read automatically from `#ID1333_000_000_value`. For temperature commands, the add-on opens `#ID1333_000_button` before looking for the input control.
 

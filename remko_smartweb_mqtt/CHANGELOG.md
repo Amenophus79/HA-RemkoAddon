@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5
+
+- Adds `remko.value_read_delay_seconds`, defaulting to 10 seconds.
+- Waits before reading SmartWeb values after opening the device page so the REMKO UI has time to refresh.
+- Applies the same read delay before mode pre-checks and mode confirmations.
+
 ## 0.3.4
 
 - Adds a configurable command cooldown after SmartWeb writes, defaulting to 90 seconds.

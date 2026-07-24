@@ -99,6 +99,7 @@ class RemkoSmartWebClient:
         self._controls = options["controls"]
         self._selectors = options["selectors"]
         self._timeout = int(self._remko["request_timeout_seconds"])
+        self._value_read_delay_seconds = int(self._remko["value_read_delay_seconds"])
         self._live_value_timeout = int(self._remko["live_value_timeout_seconds"])
         self._live_value_interval = int(self._remko["live_value_check_interval_seconds"])
         self._ignore_zero_temperatures = bool(self._remko["ignore_zero_temperatures"])
@@ -117,6 +118,7 @@ class RemkoSmartWebClient:
     def poll(self) -> HeatPumpState:
         LOGGER.info("Starting REMKO SmartWeb poll")
         self._open_device_page()
+        self._delay_before_value_read("poll")
         state = self._read_state()
         if not has_detail_values(state):
             raise SmartWebError(
@@ -208,6 +210,7 @@ class RemkoSmartWebClient:
 
         for attempt in range(1, self._mode_set_attempts + 1):
             self._open_device_page()
+            self._delay_before_value_read("mode pre-check")
             current_mode = self._read_current_mode()
             last_seen = current_mode
             if text_matches_mode(current_mode, desired_mode):
@@ -221,10 +224,9 @@ class RemkoSmartWebClient:
                 self._mode_set_attempts,
             )
             self._apply_mode_once(desired_mode)
-            if self._mode_set_retry_seconds:
-                time.sleep(self._mode_set_retry_seconds)
 
             self._open_device_page()
+            self._delay_before_value_read("mode confirmation")
             confirmed_mode = self._read_current_mode()
             last_seen = confirmed_mode
             if text_matches_mode(confirmed_mode, desired_mode):
@@ -237,6 +239,8 @@ class RemkoSmartWebClient:
                 attempt,
                 confirmed_mode or "unknown",
             )
+            if attempt < self._mode_set_attempts and self._mode_set_retry_seconds:
+                time.sleep(self._mode_set_retry_seconds)
 
         LOGGER.warning(
             "REMKO accepted operating mode command for %s but did not confirm it "
@@ -257,6 +261,16 @@ class RemkoSmartWebClient:
             if not self._click_mode_option(mode):
                 raise SmartWebError(f"No SmartWeb mode option found for '{mode}'")
         self._save_if_configured()
+
+    def _delay_before_value_read(self, reason: str) -> None:
+        if self._value_read_delay_seconds <= 0:
+            return
+        LOGGER.info(
+            "Waiting %s seconds before reading REMKO SmartWeb values (%s)",
+            self._value_read_delay_seconds,
+            reason,
+        )
+        time.sleep(self._value_read_delay_seconds)
 
     def set_temperature(self, temperature: float) -> None:
         self._open_device_page()

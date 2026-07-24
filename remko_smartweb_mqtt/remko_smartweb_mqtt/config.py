@@ -39,6 +39,7 @@ DEFAULT_OPTIONS: dict[str, Any] = {
         "device_name": "WIFI Stick - Warmwasserwärmepumpe",
         "poll_interval_minutes": 15,
         "request_timeout_seconds": 90,
+        "value_read_delay_seconds": 10,
         "live_value_timeout_seconds": 300,
         "live_value_check_interval_seconds": 10,
         "ignore_zero_temperatures": True,
@@ -191,6 +192,8 @@ def validate_options(options: dict[str, Any]) -> None:
         raise ConfigError("poll_interval_minutes must be at least 1")
     if int(remko["live_value_timeout_seconds"]) < 0:
         raise ConfigError("live_value_timeout_seconds must not be negative")
+    if int(remko["value_read_delay_seconds"]) < 0:
+        raise ConfigError("value_read_delay_seconds must not be negative")
     if int(remko["live_value_check_interval_seconds"]) < 1:
         raise ConfigError("live_value_check_interval_seconds must be at least 1")
     if int(remko["mode_set_attempts"]) < 1:

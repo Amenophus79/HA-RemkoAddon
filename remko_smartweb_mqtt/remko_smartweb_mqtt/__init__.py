@@ -1,4 +1,4 @@
 """REMKO SmartWeb MQTT bridge."""
 
 APP_NAME = "REMKO SmartWeb MQTT"
-APP_VERSION = "0.3.4"
+APP_VERSION = "0.3.5"

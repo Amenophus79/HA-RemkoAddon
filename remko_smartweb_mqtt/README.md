@@ -54,6 +54,8 @@ By default, the MQTT power switch uses the operating mode screen: `OFF` selects 
 
 After a control command, the add-on publishes an optimistic full state from the last known values plus the requested change. The next SmartWeb poll is delayed briefly so Home Assistant does not immediately jump back to a stale value while REMKO is still applying the command.
 
+Before reading SmartWeb values, the add-on waits `remko.value_read_delay_seconds` seconds so the browser UI can refresh its DOM values. The default is `10`.
+
 Because the REMKO WiFi stick can become busy after parameter writes, the add-on waits `remko.command_cooldown_seconds` seconds after each command before polling again or sending another queued command. The default is `90`.
 
 The JSON command topic accepts payloads like:
@@ -71,8 +73,9 @@ The JSON command topic accepts payloads like:
 - `remko.device_url`: Optional direct remote-control URL behind the overview house icon. Prefer `fernbedienung_vollbild/<device-id>` for headless polling; when the normal `fernbedienung/<device-id>` URL is configured, the add-on tries the fullscreen variant first.
 - `remko.poll_interval_minutes`: Poll interval, default `15`.
 - `remko.request_timeout_seconds`: Page and connection timeout, default `90`.
+- `remko.value_read_delay_seconds`: Delay before reading SmartWeb values after opening the device page, default `10`.
 - `remko.mode_set_attempts`: Verified retries for setting operating mode, default `3`.
-- `remko.mode_set_retry_seconds`: Pause before each mode verification/retry, default `20`.
+- `remko.mode_set_retry_seconds`: Pause before another mode set attempt if the first confirmation still shows the old value, default `20`.
 - `remko.command_cooldown_seconds`: Cooldown after any command before polling or sending the next queued command, default `90`.
 - `remko.power_on_mode`: Mode used by `power/set ON`, default `Automatic`.
 - `remko.homeassistant_log`: Write non-availability/errors to the Home Assistant system log, default `true`.

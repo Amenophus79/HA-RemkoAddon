@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remko_smartweb_mqtt"))
 
@@ -54,6 +54,24 @@ class SmartWebLoginTests(unittest.TestCase):
                 "https://smartweb.remko.media/geraet/fernbedienung/device-id",
             ],
         )
+
+    def test_delay_before_value_read_waits_configured_seconds(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._value_read_delay_seconds = 10
+
+        with patch("remko_smartweb_mqtt.smartweb.time.sleep") as sleep:
+            client._delay_before_value_read("poll")
+
+        sleep.assert_called_once_with(10)
+
+    def test_delay_before_value_read_skips_zero_delay(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._value_read_delay_seconds = 0
+
+        with patch("remko_smartweb_mqtt.smartweb.time.sleep") as sleep:
+            client._delay_before_value_read("poll")
+
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":

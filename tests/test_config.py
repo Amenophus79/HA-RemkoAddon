@@ -94,6 +94,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(options["remko"]["username"], "real@example.com")
         self.assertEqual(options["remko"]["device_name"], "WIFI Stick - Warmwasserwärmepumpe")
         self.assertEqual(options["remko"]["poll_interval_minutes"], 7)
+        self.assertEqual(options["remko"]["value_read_delay_seconds"], 10)
         self.assertEqual(options["mqtt"]["host"], "mqtt.local")
 
     def test_missing_credentials_raise_clear_error(self) -> None:
@@ -105,6 +106,29 @@ class ConfigTests(unittest.TestCase):
                 load_options(options_path)
 
         self.assertIn("Missing required REMKO option", str(ctx.exception))
+
+    def test_negative_value_read_delay_raises_clear_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            options_path = Path(temp_dir) / "options.json"
+            options_path.write_text(
+                json.dumps(
+                    {
+                        "remko": {
+                            "credentials_file": "",
+                            "username": "user@example.com",
+                            "password": "secret",
+                            "device_name": "WIFI Stick - Warmwasserwärmepumpe",
+                            "value_read_delay_seconds": -1,
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError) as ctx:
+                load_options(options_path)
+
+        self.assertIn("value_read_delay_seconds must not be negative", str(ctx.exception))
 
     def test_power_on_mode_accepts_alias(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
