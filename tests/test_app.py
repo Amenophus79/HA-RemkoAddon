@@ -13,9 +13,9 @@ from remko_smartweb_mqtt.app import (
     handle_poll_error,
     process_pending_commands,
 )
-from remko_smartweb_mqtt.feedback import UNAVAILABLE
+from remko_smartweb_mqtt.feedback import MAINTENANCE, UNAVAILABLE
 from remko_smartweb_mqtt.models import Command
-from remko_smartweb_mqtt.smartweb import SmartWebError
+from remko_smartweb_mqtt.smartweb import SmartWebError, SmartWebMaintenanceError
 
 
 class AppCommandTests(unittest.TestCase):
@@ -72,6 +72,24 @@ class AppCommandTests(unittest.TestCase):
         self.assertEqual(
             ha_log.notifications,
             [(UNAVAILABLE, "Timed out opening device", "warning")],
+        )
+
+    def test_handle_poll_error_reports_maintenance_status(self) -> None:
+        mqtt_bridge = MqttBridgeFake()
+        ha_log = HomeAssistantLogFake()
+        error = SmartWebMaintenanceError("REMKO SmartWeb maintenance notice")
+
+        with self.assertLogs("remko_smartweb_mqtt.app", level="WARNING") as logs:
+            handle_poll_error(error, mqtt_bridge, ha_log)
+
+        self.assertIn("REMKO SmartWeb maintenance", "\n".join(logs.output))
+        self.assertEqual(
+            mqtt_bridge.feedback,
+            [(MAINTENANCE, "REMKO SmartWeb maintenance notice", False)],
+        )
+        self.assertEqual(
+            ha_log.notifications,
+            [(MAINTENANCE, "REMKO SmartWeb maintenance notice", "warning")],
         )
 
 

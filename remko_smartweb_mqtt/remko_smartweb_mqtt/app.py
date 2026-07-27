@@ -7,12 +7,12 @@ import time
 from typing import Any
 
 from .config import ConfigError, ensure_credentials_template, load_options
-from .feedback import AVAILABLE, BUSY, ERROR, UNAVAILABLE
+from .feedback import AVAILABLE, BUSY, ERROR, MAINTENANCE, UNAVAILABLE
 from .homeassistant_log import HomeAssistantLogNotifier
 from .models import Command
 from .modes import canonicalize_mode
 from .mqtt_bridge import MqttBridge
-from .smartweb import RemkoSmartWebClient, SmartWebError
+from .smartweb import RemkoSmartWebClient, SmartWebError, SmartWebMaintenanceError
 
 LOGGER = logging.getLogger(__name__)
 MQTT_CONNECT_RETRY_SECONDS = 30
@@ -130,7 +130,11 @@ def handle_poll_error(
     mqtt_bridge: MqttBridge,
     ha_log: HomeAssistantLogNotifier,
 ) -> None:
-    if isinstance(error, SmartWebError):
+    if isinstance(error, SmartWebMaintenanceError):
+        LOGGER.warning("REMKO SmartWeb maintenance: %s", error)
+        status = MAINTENANCE
+        level = "warning"
+    elif isinstance(error, SmartWebError):
         LOGGER.warning("REMKO SmartWeb poll unavailable: %s", error)
         status = UNAVAILABLE
         level = "warning"

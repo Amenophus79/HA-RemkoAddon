@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.7
+
+- Detects SmartWeb maintenance notices on the login page before submitting credentials.
+- Publishes feedback status `maintenance` with `available: false` while REMKO announces maintenance.
+- Logs SmartWeb maintenance notices as warnings without Selenium tracebacks.
+
 ## 0.3.6
 
 - Logs expected SmartWeb polling failures such as unavailable device screens as warnings without Python tracebacks.

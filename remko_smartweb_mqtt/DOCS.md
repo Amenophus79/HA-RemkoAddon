@@ -61,6 +61,8 @@ After opening the device page, the add-on waits `remko.value_read_delay_seconds`
 
 If the REMKO overview action icon is greyed out or the pump screen cannot be opened, the add-on publishes a feedback payload to `remko/<device_slug>/feedback` with `status: unavailable`, `available: false`, and a message explaining the timeout. Home Assistant also gets a SmartWeb availability binary sensor and SmartWeb status sensor through MQTT discovery.
 
+If REMKO shows a SmartWeb maintenance notice on the login page, the add-on stops before submitting credentials and publishes feedback with `status: maintenance` and `available: false`.
+
 If `remko.homeassistant_log` is enabled, unavailable/error states are additionally written to the Home Assistant system log with the configured `remko.homeassistant_log_logger` logger name. The add-on calls Home Assistant Core through the Supervisor proxy and `system_log.write`; repeated identical messages are suppressed until a successful poll resets the notifier.
 
 If `remko.homeassistant_notification` is enabled, unavailable/error states are also shown as a persistent notification in the Home Assistant UI. The notification uses `remko.homeassistant_notification_id`, so a new failure updates the existing notification instead of creating a pile of duplicates. A successful poll dismisses it automatically.

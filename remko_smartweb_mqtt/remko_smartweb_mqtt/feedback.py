@@ -8,6 +8,7 @@ UNAVAILABLE = "unavailable"
 ERROR = "error"
 STARTING = "starting"
 BUSY = "busy"
+MAINTENANCE = "maintenance"
 
 
 def build_feedback_payload(

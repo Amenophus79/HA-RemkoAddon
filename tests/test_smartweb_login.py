@@ -7,7 +7,12 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remko_smartweb_mqtt"))
 
-from remko_smartweb_mqtt.smartweb import RemkoSmartWebClient, device_url_candidates
+from remko_smartweb_mqtt.smartweb import (
+    RemkoSmartWebClient,
+    SmartWebMaintenanceError,
+    device_url_candidates,
+    extract_maintenance_notice,
+)
 
 
 class SmartWebLoginTests(unittest.TestCase):
@@ -72,6 +77,47 @@ class SmartWebLoginTests(unittest.TestCase):
             client._delay_before_value_read("poll")
 
         sleep.assert_not_called()
+
+    def test_extract_maintenance_notice_from_login_page_text(self) -> None:
+        notice = extract_maintenance_notice(
+            """
+            REMKO Smart-Webportal
+            Login
+            Email*
+            Password*
+            Important Informations
+            Because of maintenance work, the Smartweb will be
+            unavailable on the 27.07.2026, from 11:00 to 13:00
+            (CEST).
+            Register
+            REMKO Smart-Webportal
+            Important Informations
+            Because of maintenance work, the Smartweb will be
+            unavailable on the 27.07.2026, from 11:00 to 13:00
+            (CEST).
+            """
+        )
+
+        self.assertEqual(
+            notice,
+            "Important Informations Because of maintenance work, the Smartweb will be "
+            "unavailable on the 27.07.2026, from 11:00 to 13:00 (CEST).",
+        )
+
+    def test_maintenance_notice_raises_specific_error(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._body_text = Mock(
+            return_value=(
+                "REMKO Smart-Webportal\n"
+                "Important Informations\n"
+                "Because of maintenance work, the Smartweb will be unavailable."
+            )
+        )
+
+        with self.assertRaises(SmartWebMaintenanceError) as ctx:
+            client._raise_for_maintenance_notice()
+
+        self.assertIn("maintenance notice", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import time
 from collections.abc import Iterable
@@ -91,6 +92,10 @@ DEFAULT_ACTION_SELECTORS = {
 
 class SmartWebError(RuntimeError):
     """Raised when REMKO SmartWeb cannot be read or controlled."""
+
+
+class SmartWebMaintenanceError(SmartWebError):
+    """Raised when REMKO SmartWeb announces planned maintenance."""
 
 
 class RemkoSmartWebClient:
@@ -385,6 +390,7 @@ class RemkoSmartWebClient:
 
     def _login_if_needed(self) -> None:
         self._ensure_driver().switch_to.default_content()
+        self._raise_for_maintenance_notice()
         username = str(self._remko["username"])
         password = str(self._remko["password"])
 
@@ -471,11 +477,17 @@ class RemkoSmartWebClient:
                 EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
             )
         except TimeoutException:
+            self._raise_for_maintenance_notice()
             raise SmartWebError(
                 "REMKO SmartWeb login did not complete. Check credentials and SmartWeb availability. "
                 f"{self._page_diagnostics(str(self._remko.get('device_name') or '').strip())}"
             ) from None
         LOGGER.info("REMKO SmartWeb login transition completed")
+
+    def _raise_for_maintenance_notice(self) -> None:
+        notice = extract_maintenance_notice(self._body_text())
+        if notice:
+            raise SmartWebMaintenanceError(f"REMKO SmartWeb maintenance notice: {notice}")
 
     def _wait_after_login(self) -> None:
         if str(self._remko.get("device_url") or "").strip():
@@ -1136,6 +1148,69 @@ def device_url_candidates(device_url: str) -> list[str]:
         if candidate not in unique_candidates:
             unique_candidates.append(candidate)
     return unique_candidates
+
+
+def extract_maintenance_notice(body_text: str) -> str | None:
+    lines = compact_visible_lines(body_text)
+    if not lines:
+        return None
+
+    joined = " ".join(lines)
+    lower_joined = joined.lower()
+    if "smartweb" not in lower_joined and "smart-web" not in lower_joined:
+        return None
+    if not any(
+        marker in lower_joined
+        for marker in (
+            "maintenance",
+            "wartung",
+            "unavailable",
+            "nicht verfügbar",
+            "nicht verfuegbar",
+        )
+    ):
+        return None
+
+    start_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if re.search(
+                r"important information|important informations|wichtige information|maintenance|wartung",
+                line,
+                re.IGNORECASE,
+            )
+        ),
+        0,
+    )
+
+    notice_lines: list[str] = []
+    stop_markers = {"login", "register", "email*", "password*", "*required fields"}
+    for line in lines[start_index:]:
+        lower_line = line.lower()
+        if notice_lines and lower_line in stop_markers:
+            break
+        notice_lines.append(line)
+        if len(notice_lines) >= 6:
+            break
+
+    notice = " ".join(notice_lines).strip()
+    return notice[:500] if notice else None
+
+
+def compact_visible_lines(body_text: str) -> list[str]:
+    seen: set[str] = set()
+    lines: list[str] = []
+    for raw_line in str(body_text or "").splitlines():
+        line = clean_value(raw_line)
+        if not line:
+            continue
+        key = line.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        lines.append(line)
+    return lines
 
 
 def has_detail_values(state: HeatPumpState) -> bool:
