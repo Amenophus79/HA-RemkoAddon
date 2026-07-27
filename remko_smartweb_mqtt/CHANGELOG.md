@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6
+
+- Logs expected SmartWeb polling failures such as unavailable device screens as warnings without Python tracebacks.
+- Keeps unexpected polling failures logged with full stack traces.
+- Still publishes MQTT error and `unavailable` feedback for SmartWeb polling failures.
+
 ## 0.3.5
 
 - Adds `remko.value_read_delay_seconds`, defaulting to 10 seconds.

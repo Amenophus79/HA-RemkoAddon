@@ -7,8 +7,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remko_smartweb_mqtt"))
 
-from remko_smartweb_mqtt.app import apply_command, command_settle_seconds, process_pending_commands
+from remko_smartweb_mqtt.app import (
+    apply_command,
+    command_settle_seconds,
+    handle_poll_error,
+    process_pending_commands,
+)
+from remko_smartweb_mqtt.feedback import UNAVAILABLE
 from remko_smartweb_mqtt.models import Command
+from remko_smartweb_mqtt.smartweb import SmartWebError
 
 
 class AppCommandTests(unittest.TestCase):
@@ -45,6 +52,27 @@ class AppCommandTests(unittest.TestCase):
         self.assertEqual(smartweb.calls, [("mode", "Eco")])
         self.assertEqual(mqtt_bridge.patches, [{"operating_mode": "Eco", "power": "ON"}])
         self.assertEqual(command_queue.qsize(), 1)
+
+    def test_handle_poll_error_logs_smartweb_error_without_traceback(self) -> None:
+        mqtt_bridge = MqttBridgeFake()
+        ha_log = HomeAssistantLogFake()
+        error = SmartWebError("Timed out opening device")
+
+        with self.assertLogs("remko_smartweb_mqtt.app", level="WARNING") as logs:
+            handle_poll_error(error, mqtt_bridge, ha_log)
+
+        output = "\n".join(logs.output)
+        self.assertIn("REMKO SmartWeb poll unavailable", output)
+        self.assertNotIn("Traceback", output)
+        self.assertEqual(mqtt_bridge.errors, [error])
+        self.assertEqual(
+            mqtt_bridge.feedback,
+            [(UNAVAILABLE, "Timed out opening device", False)],
+        )
+        self.assertEqual(
+            ha_log.notifications,
+            [(UNAVAILABLE, "Timed out opening device", "warning")],
+        )
 
 
 class SmartWebFake:
@@ -84,6 +112,15 @@ class MqttBridgeFake:
         available: bool | None = None,
     ) -> None:
         self.feedback.append((status, message, available))
+
+
+class HomeAssistantLogFake:
+    def __init__(self) -> None:
+        self.notifications: list[tuple[str, str, str]] = []
+
+    def notify_once(self, status: str, message: str, *, level: str = "warning") -> bool:
+        self.notifications.append((status, message, level))
+        return True
 
 
 def options(mode_set_retry_seconds: int = 20, command_cooldown_seconds: int = 90) -> dict:

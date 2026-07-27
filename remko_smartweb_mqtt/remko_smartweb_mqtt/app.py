@@ -89,12 +89,7 @@ def main() -> None:
                     mqtt_bridge.publish_availability("online")
                     ha_log.reset()
                 except Exception as exc:
-                    LOGGER.exception("Polling REMKO SmartWeb failed")
-                    mqtt_bridge.publish_error(exc)
-                    status = UNAVAILABLE if isinstance(exc, SmartWebError) else ERROR
-                    mqtt_bridge.publish_feedback(status, str(exc), available=False)
-                    level = "warning" if status == UNAVAILABLE else "error"
-                    ha_log.notify_once(status, str(exc), level=level)
+                    handle_poll_error(exc, mqtt_bridge, ha_log)
                 next_poll = time.monotonic() + poll_interval
 
             time.sleep(1)
@@ -128,6 +123,25 @@ def sleep_until_stopped(stop: "StopFlag", seconds: int) -> None:
         if remaining <= 0:
             return
         time.sleep(min(1, remaining))
+
+
+def handle_poll_error(
+    error: BaseException,
+    mqtt_bridge: MqttBridge,
+    ha_log: HomeAssistantLogNotifier,
+) -> None:
+    if isinstance(error, SmartWebError):
+        LOGGER.warning("REMKO SmartWeb poll unavailable: %s", error)
+        status = UNAVAILABLE
+        level = "warning"
+    else:
+        LOGGER.exception("Polling REMKO SmartWeb failed")
+        status = ERROR
+        level = "error"
+
+    mqtt_bridge.publish_error(error)
+    mqtt_bridge.publish_feedback(status, str(error), available=False)
+    ha_log.notify_once(status, str(error), level=level)
 
 
 def process_pending_commands(
