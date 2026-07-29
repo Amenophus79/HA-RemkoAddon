@@ -122,18 +122,21 @@ class RemkoSmartWebClient:
 
     def poll(self) -> HeatPumpState:
         LOGGER.info("Starting REMKO SmartWeb poll")
-        self._open_device_page()
-        self._delay_before_value_read("poll")
-        state = self._read_state()
-        if not has_detail_values(state):
-            raise SmartWebError(
-                "REMKO SmartWeb did not expose heat pump detail values. "
-                "The pump may be unavailable or selectors for this SmartWeb screen are still missing."
-            )
-        if self._looks_like_placeholder_state(state):
-            state = self._wait_for_live_state(state)
-        LOGGER.info("Read REMKO state: %s", state.as_payload())
-        return state
+        try:
+            self._open_device_page()
+            self._delay_before_value_read("poll")
+            state = self._read_state()
+            if not has_detail_values(state):
+                raise SmartWebError(
+                    "REMKO SmartWeb did not expose heat pump detail values. "
+                    "The pump may be unavailable or selectors for this SmartWeb screen are still missing."
+                )
+            if self._looks_like_placeholder_state(state):
+                state = self._wait_for_live_state(state)
+            LOGGER.info("Read REMKO state: %s", state.as_payload())
+            return state
+        finally:
+            self._park_browser()
 
     def _read_state(self) -> HeatPumpState:
         driver = self._ensure_driver()
@@ -197,64 +200,70 @@ class RemkoSmartWebClient:
         return state.temperature_top == 0 and state.temperature_bottom == 0
 
     def set_power(self, enabled: bool) -> bool:
-        self._open_device_page()
-        selector_name = "power_on_button" if enabled else "power_off_button"
-        selector = self._selectors.get(selector_name)
-        if selector:
-            self._click_selector(selector)
-        else:
-            target_mode = str(self._remko["power_on_mode"]) if enabled else "Off"
-            return self.set_mode(target_mode)
-        self._save_if_configured()
-        return True
+        try:
+            self._open_device_page()
+            selector_name = "power_on_button" if enabled else "power_off_button"
+            selector = self._selectors.get(selector_name)
+            if selector:
+                self._click_selector(selector)
+            else:
+                target_mode = str(self._remko["power_on_mode"]) if enabled else "Off"
+                return self.set_mode(target_mode)
+            self._save_if_configured()
+            return True
+        finally:
+            self._park_browser()
 
     def set_mode(self, mode: str) -> bool:
-        supported_modes = [str(item) for item in self._controls.get("supported_modes", [])]
-        desired_mode = canonicalize_mode(mode, supported_modes) or mode
-        last_seen: str | None = None
+        try:
+            supported_modes = [str(item) for item in self._controls.get("supported_modes", [])]
+            desired_mode = canonicalize_mode(mode, supported_modes) or mode
+            last_seen: str | None = None
 
-        for attempt in range(1, self._mode_set_attempts + 1):
-            self._open_device_page()
-            self._delay_before_value_read("mode pre-check")
-            current_mode = self._read_current_mode()
-            last_seen = current_mode
-            if text_matches_mode(current_mode, desired_mode):
-                LOGGER.info("REMKO operating mode is already %s", current_mode)
-                return True
+            for attempt in range(1, self._mode_set_attempts + 1):
+                self._open_device_page()
+                self._delay_before_value_read("mode pre-check")
+                current_mode = self._read_current_mode()
+                last_seen = current_mode
+                if text_matches_mode(current_mode, desired_mode):
+                    LOGGER.info("REMKO operating mode is already %s", current_mode)
+                    return True
 
-            LOGGER.info(
-                "Setting REMKO operating mode to %s, attempt %s/%s",
-                desired_mode,
-                attempt,
-                self._mode_set_attempts,
-            )
-            self._apply_mode_once(desired_mode)
+                LOGGER.info(
+                    "Setting REMKO operating mode to %s, attempt %s/%s",
+                    desired_mode,
+                    attempt,
+                    self._mode_set_attempts,
+                )
+                self._apply_mode_once(desired_mode)
 
-            self._open_device_page()
-            self._delay_before_value_read("mode confirmation")
-            confirmed_mode = self._read_current_mode()
-            last_seen = confirmed_mode
-            if text_matches_mode(confirmed_mode, desired_mode):
-                LOGGER.info("REMKO confirmed operating mode %s", confirmed_mode)
-                return True
+                self._open_device_page()
+                self._delay_before_value_read("mode confirmation")
+                confirmed_mode = self._read_current_mode()
+                last_seen = confirmed_mode
+                if text_matches_mode(confirmed_mode, desired_mode):
+                    LOGGER.info("REMKO confirmed operating mode %s", confirmed_mode)
+                    return True
+
+                LOGGER.warning(
+                    "REMKO did not confirm operating mode %s after attempt %s; last seen: %s",
+                    desired_mode,
+                    attempt,
+                    confirmed_mode or "unknown",
+                )
+                if attempt < self._mode_set_attempts and self._mode_set_retry_seconds:
+                    time.sleep(self._mode_set_retry_seconds)
 
             LOGGER.warning(
-                "REMKO did not confirm operating mode %s after attempt %s; last seen: %s",
+                "REMKO accepted operating mode command for %s but did not confirm it "
+                "after %s attempts; last seen: %s",
                 desired_mode,
-                attempt,
-                confirmed_mode or "unknown",
+                self._mode_set_attempts,
+                last_seen or "unknown",
             )
-            if attempt < self._mode_set_attempts and self._mode_set_retry_seconds:
-                time.sleep(self._mode_set_retry_seconds)
-
-        LOGGER.warning(
-            "REMKO accepted operating mode command for %s but did not confirm it "
-            "after %s attempts; last seen: %s",
-            desired_mode,
-            self._mode_set_attempts,
-            last_seen or "unknown",
-        )
-        return False
+            return False
+        finally:
+            self._park_browser()
 
     def _apply_mode_once(self, mode: str) -> None:
         selector = self._selectors.get("mode_control")
@@ -278,20 +287,34 @@ class RemkoSmartWebClient:
         time.sleep(self._value_read_delay_seconds)
 
     def set_temperature(self, temperature: float) -> None:
-        self._open_device_page()
-        selector = self._selectors.get("target_temperature_input")
-        if selector:
-            element = self._find(selector)
-        else:
-            element = self._find_number_input_near(TARGET_LABELS, timeout=3, required=False)
-            if element is None:
-                self._open_target_temperature_editor()
-                element = self._find_number_input_near(TARGET_LABELS)
-        value = format_number(temperature)
-        element.click()
-        element.send_keys(Keys.CONTROL, "a")
-        element.send_keys(value)
-        self._save_if_configured()
+        try:
+            self._open_device_page()
+            selector = self._selectors.get("target_temperature_input")
+            if selector:
+                element = self._find(selector)
+            else:
+                element = self._find_number_input_near(TARGET_LABELS, timeout=3, required=False)
+                if element is None:
+                    self._open_target_temperature_editor()
+                    element = self._find_number_input_near(TARGET_LABELS)
+            value = format_number(temperature)
+            element.click()
+            element.send_keys(Keys.CONTROL, "a")
+            element.send_keys(value)
+            self._save_if_configured()
+        finally:
+            self._park_browser()
+
+    def _park_browser(self) -> None:
+        if self._driver is None:
+            return
+        try:
+            self._driver.switch_to.default_content()
+            self._driver.get("about:blank")
+            LOGGER.debug("Parked browser on about:blank until the next SmartWeb access")
+        except WebDriverException:
+            LOGGER.warning("Could not park the browser; closing the broken session")
+            self.close()
 
     def _ensure_driver(self) -> webdriver.Chrome:
         if self._driver is not None:

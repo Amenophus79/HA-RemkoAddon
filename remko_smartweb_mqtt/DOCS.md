@@ -59,6 +59,8 @@ Polling repeats every `remko.poll_interval_minutes` minutes. The default is `15`
 
 After opening the device page, the add-on waits `remko.value_read_delay_seconds` seconds before reading values. The default is `10` seconds so the SmartWeb browser UI can refresh its DOM values before they are scraped.
 
+After every poll and control command, including failed operations, the browser navigates to `about:blank`. This prevents the SmartWeb device page from generating background traffic while the add-on waits. Chromium itself remains open, so cookies and the login session can be reused at the next access.
+
 If the REMKO overview house action is disabled or marked inactive, the add-on does not attempt to open the configured direct device URL. It publishes a feedback payload to `remko/<device_slug>/feedback` with `status: unavailable` and `available: false`, then waits until the next configured polling interval before checking again. The same feedback is published if the pump screen cannot be opened. Home Assistant also gets a SmartWeb availability binary sensor and SmartWeb status sensor through MQTT discovery.
 
 If REMKO shows a SmartWeb maintenance notice on the login page, the add-on stops before submitting credentials and publishes feedback with `status: maintenance` and `available: false`.

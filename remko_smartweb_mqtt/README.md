@@ -4,6 +4,8 @@ Home Assistant add-on that logs in to REMKO SmartWeb, opens the configured heat 
 
 The SmartWeb automation always runs in headless Chromium, so the add-on does not require a GUI, display server, VNC, or Xvfb.
 
+After each poll or control command, Chromium navigates to `about:blank`. This stops background requests from the SmartWeb device page between accesses while preserving cookies and the login session for the next poll.
+
 This add-on is experimental because REMKO SmartWeb is a browser UI, not a documented public API. The default scraper uses label and text heuristics. If your REMKO page uses different markup, configure the CSS/XPath selectors in the add-on options.
 
 ## MQTT entities

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.9
+
+- Parks Chromium on `about:blank` after polls and control commands to stop SmartWeb background traffic between accesses.
+- Keeps the browser session, cookies, and login state available for the next poll.
+- Parks the browser after both successful and failed SmartWeb operations.
+
 ## 0.3.8
 
 - Checks the configured device's house action on the SmartWeb overview before opening a direct device URL.

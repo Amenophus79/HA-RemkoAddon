@@ -9,13 +9,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remko_smartweb_mqt
 
 from remko_smartweb_mqtt.smartweb import (
     RemkoSmartWebClient,
+    SmartWebError,
     SmartWebMaintenanceError,
     device_url_candidates,
     extract_maintenance_notice,
 )
+from remko_smartweb_mqtt.models import HeatPumpState
 
 
 class SmartWebLoginTests(unittest.TestCase):
+    def test_successful_poll_parks_browser_after_reading(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._open_device_page = Mock()
+        client._delay_before_value_read = Mock()
+        client._read_state = Mock(return_value=HeatPumpState(temperature_top=48.5))
+        client._looks_like_placeholder_state = Mock(return_value=False)
+        client._park_browser = Mock()
+
+        state = client.poll()
+
+        self.assertEqual(state.temperature_top, 48.5)
+        client._park_browser.assert_called_once_with()
+
+    def test_failed_poll_parks_browser_before_propagating_error(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._open_device_page = Mock(side_effect=SmartWebError("offline"))
+        client._park_browser = Mock()
+
+        with self.assertRaisesRegex(SmartWebError, "offline"):
+            client.poll()
+
+        client._park_browser.assert_called_once_with()
+
+    def test_park_browser_uses_blank_page_without_closing_session(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._driver = Mock()
+        client.close = Mock()
+
+        client._park_browser()
+
+        client._driver.switch_to.default_content.assert_called_once_with()
+        client._driver.get.assert_called_once_with("about:blank")
+        client.close.assert_not_called()
+
     def test_direct_device_url_skips_overview_wait_after_login(self) -> None:
         client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
         client._remko = {"device_url": "https://smartweb.remko.media/geraet/fernbedienung/device"}
