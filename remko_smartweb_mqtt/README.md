@@ -31,7 +31,7 @@ SmartWeb/pump availability feedback is published as JSON to:
 remko/<device_slug>/feedback
 ```
 
-When the REMKO overview action icon is greyed out or the pump screen cannot be opened, the feedback status becomes `unavailable` and the message explains the timeout.
+Before opening a configured direct device URL, the add-on checks the device's house action on the REMKO overview. If the action is disabled or marked inactive, no device access is attempted. The feedback status becomes `unavailable`, and the add-on tries again only at the next configured polling interval. The same feedback is used if the pump screen cannot be opened.
 
 If `remko.homeassistant_log` is enabled, the same non-availability is also written to the Home Assistant system log through `system_log.write`. If `remko.homeassistant_notification` is enabled, the add-on also creates a persistent notification in the Home Assistant UI and dismisses it automatically after a successful poll. Repeated identical messages are de-duplicated until the pump is readable again.
 
@@ -70,7 +70,7 @@ The JSON command topic accepts payloads like:
 - `remko.username`: REMKO SmartWeb login user, unless provided by the credentials file.
 - `remko.password`: REMKO SmartWeb login password, unless provided by the credentials file.
 - `remko.device_name`: Name shown on the device overview page, unless provided by the credentials file.
-- `remko.device_url`: Optional direct remote-control URL behind the overview house icon. Prefer `fernbedienung_vollbild/<device-id>` for headless polling; when the normal `fernbedienung/<device-id>` URL is configured, the add-on tries the fullscreen variant first.
+- `remko.device_url`: Optional direct remote-control URL behind the overview house icon. The overview action must be enabled before this URL is opened. Prefer `fernbedienung_vollbild/<device-id>` for headless polling; when the normal `fernbedienung/<device-id>` URL is configured, the add-on tries the fullscreen variant first.
 - `remko.poll_interval_minutes`: Poll interval, default `15`.
 - `remko.request_timeout_seconds`: Page and connection timeout, default `90`.
 - `remko.value_read_delay_seconds`: Delay before reading SmartWeb values after opening the device page, default `10`.

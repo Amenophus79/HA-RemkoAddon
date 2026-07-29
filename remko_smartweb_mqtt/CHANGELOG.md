@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8
+
+- Checks the configured device's house action on the SmartWeb overview before opening a direct device URL.
+- Skips direct device access while the overview action is disabled and retries at the next polling interval.
+- Reports the skipped access as unavailable through the existing MQTT and Home Assistant feedback.
+
 ## 0.3.7
 
 - Detects SmartWeb maintenance notices on the login page before submitting credentials.

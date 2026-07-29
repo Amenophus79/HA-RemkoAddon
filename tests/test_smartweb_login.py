@@ -34,6 +34,46 @@ class SmartWebLoginTests(unittest.TestCase):
 
         client._wait_for_overview_screen.assert_called_once_with()
 
+    def test_disabled_overview_action_blocks_direct_device_url(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._device_action_result = Mock(
+            return_value={
+                "found": True,
+                "enabled": False,
+                "clicked": False,
+                "reason": "aria-disabled",
+            }
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "skipping the direct device URL until the next poll",
+        ):
+            client._raise_if_device_action_disabled("Heat pump")
+
+        client._device_action_result.assert_called_once_with(
+            "Heat pump",
+            click_when_enabled=False,
+        )
+
+    def test_enabled_overview_action_allows_direct_device_url(self) -> None:
+        client = RemkoSmartWebClient.__new__(RemkoSmartWebClient)
+        client._device_action_result = Mock(
+            return_value={
+                "found": True,
+                "enabled": True,
+                "clicked": False,
+                "reason": "enabled",
+            }
+        )
+
+        client._raise_if_device_action_disabled("Heat pump")
+
+        client._device_action_result.assert_called_once_with(
+            "Heat pump",
+            click_when_enabled=False,
+        )
+
     def test_normal_remote_url_prefers_fullscreen_candidate(self) -> None:
         candidates = device_url_candidates(
             "https://smartweb.remko.media/geraet/fernbedienung/device-id"

@@ -342,6 +342,8 @@ class RemkoSmartWebClient:
 
         if device_url:
             device_name = str(self._remko["device_name"]).strip()
+            self._wait_for_overview_screen()
+            self._raise_if_device_action_disabled(device_name)
             last_error: SmartWebError | None = None
             for candidate_url in device_url_candidates(device_url):
                 driver.switch_to.default_content()
@@ -726,9 +728,15 @@ class RemkoSmartWebClient:
                     LOGGER.warning("Configured selector '%s' did not match", selector_name)
         return False
 
-    def _click_device_action(self, device_name: str) -> bool:
+    def _device_action_result(
+        self,
+        device_name: str,
+        *,
+        click_when_enabled: bool,
+    ) -> dict[str, Any] | None:
         script = """
             const deviceName = arguments[0];
+            const clickWhenEnabled = arguments[1];
             const normalize = (value) => (value || "")
                 .replace(/\\s+/g, " ")
                 .trim()
@@ -776,16 +784,7 @@ class RemkoSmartWebClient:
                 .filter((element) => {
                     const rect = element.getBoundingClientRect();
                     const text = normalize(element.innerText || element.textContent);
-                    const className = String(
-                        element.className && element.className.baseVal
-                            ? element.className.baseVal
-                            : element.className || ""
-                    );
-                    const disabled = element.disabled ||
-                        element.getAttribute("aria-disabled") === "true" ||
-                        /\\bdisabled\\b/i.test(className);
-                    return !disabled &&
-                        rect.width > 0 &&
+                    return rect.width > 0 &&
                         rect.height > 0 &&
                         rect.left > labelRect.left &&
                         !text.includes(target);
@@ -798,12 +797,60 @@ class RemkoSmartWebClient:
 
             const action = candidates[0];
             if (!action) {
-                return {clicked: false, reason: "no enabled action found in device row"};
+                return {found: false, enabled: false, clicked: false, reason: "no action found in device row"};
             }
 
+            const disabledPattern = /(^|[\\s_-])(disabled|inactive|unavailable|offline)([\\s_-]|$)/i;
+            let disabledReason = "";
+            for (
+                let current = action;
+                current && current !== container.parentElement;
+                current = current.parentElement
+            ) {
+                const className = String(
+                    current.className && current.className.baseVal
+                        ? current.className.baseVal
+                        : current.className || ""
+                );
+                const style = window.getComputedStyle(current);
+                if (current.disabled) {
+                    disabledReason = "disabled property";
+                    break;
+                }
+                if (current.getAttribute("aria-disabled") === "true") {
+                    disabledReason = "aria-disabled";
+                    break;
+                }
+                if (disabledPattern.test(className)) {
+                    disabledReason = `disabled class '${className}'`;
+                    break;
+                }
+                if (style.pointerEvents === "none") {
+                    disabledReason = "pointer-events none";
+                    break;
+                }
+                if (style.cursor === "not-allowed") {
+                    disabledReason = "cursor not-allowed";
+                    break;
+                }
+            }
+            if (disabledReason) {
+                return {
+                    found: true,
+                    enabled: false,
+                    clicked: false,
+                    reason: disabledReason
+                };
+            }
+
+            if (!clickWhenEnabled) {
+                return {found: true, enabled: true, clicked: false, reason: "enabled"};
+            }
             action.scrollIntoView({block: "center", inline: "center"});
             action.click();
             return {
+                found: true,
+                enabled: true,
                 clicked: true,
                 tag: action.tagName,
                 className: String(
@@ -814,8 +861,26 @@ class RemkoSmartWebClient:
                 title: action.getAttribute("title") || action.getAttribute("aria-label") || ""
             };
         """
-        result = self._ensure_driver().execute_script(script, device_name)
-        LOGGER.debug("Device action click result for '%s': %s", device_name, result)
+        result = self._ensure_driver().execute_script(
+            script,
+            device_name,
+            click_when_enabled,
+        )
+        LOGGER.debug("Device action result for '%s': %s", device_name, result)
+        return result
+
+    def _raise_if_device_action_disabled(self, device_name: str) -> None:
+        result = self._device_action_result(device_name, click_when_enabled=False)
+        if result and result.get("found") and not result.get("enabled"):
+            reason = str(result.get("reason") or "disabled")
+            raise SmartWebError(
+                f"Device '{device_name}' is unavailable because its overview house "
+                f"action is disabled ({reason}); skipping the direct device URL until "
+                "the next poll"
+            )
+
+    def _click_device_action(self, device_name: str) -> bool:
+        result = self._device_action_result(device_name, click_when_enabled=True)
         return bool(result and result.get("clicked"))
 
     def _open_operating_mode_selector(self) -> None:

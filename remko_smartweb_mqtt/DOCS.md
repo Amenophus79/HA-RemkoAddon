@@ -34,7 +34,7 @@ On app start, the app creates `/config/credentials.example.json` if it does not 
 
 Values in the credentials file override the same values from the Home Assistant add-on options.
 
-If you know the remote-control URL behind the house icon, set `remko.device_url`. The add-on will still log in first, then open this URL directly instead of relying on the overview row click. Prefer the fullscreen URL for headless polling:
+If you know the remote-control URL behind the house icon, set `remko.device_url`. The add-on will still log in first and inspect the configured device on the overview. It opens the direct URL only while the house action is enabled. Prefer the fullscreen URL for headless polling:
 
 ```text
 https://smartweb.remko.media/geraet/fernbedienung_vollbild/<device-id>
@@ -59,7 +59,7 @@ Polling repeats every `remko.poll_interval_minutes` minutes. The default is `15`
 
 After opening the device page, the add-on waits `remko.value_read_delay_seconds` seconds before reading values. The default is `10` seconds so the SmartWeb browser UI can refresh its DOM values before they are scraped.
 
-If the REMKO overview action icon is greyed out or the pump screen cannot be opened, the add-on publishes a feedback payload to `remko/<device_slug>/feedback` with `status: unavailable`, `available: false`, and a message explaining the timeout. Home Assistant also gets a SmartWeb availability binary sensor and SmartWeb status sensor through MQTT discovery.
+If the REMKO overview house action is disabled or marked inactive, the add-on does not attempt to open the configured direct device URL. It publishes a feedback payload to `remko/<device_slug>/feedback` with `status: unavailable` and `available: false`, then waits until the next configured polling interval before checking again. The same feedback is published if the pump screen cannot be opened. Home Assistant also gets a SmartWeb availability binary sensor and SmartWeb status sensor through MQTT discovery.
 
 If REMKO shows a SmartWeb maintenance notice on the login page, the add-on stops before submitting credentials and publishes feedback with `status: maintenance` and `available: false`.
 
